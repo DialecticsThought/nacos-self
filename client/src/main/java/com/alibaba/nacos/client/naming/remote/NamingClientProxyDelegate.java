@@ -52,23 +52,23 @@ import static com.alibaba.nacos.client.utils.LogUtils.NAMING_LOGGER;
  * @author xiweng.yy
  */
 public class NamingClientProxyDelegate implements NamingClientProxy {
-    
+
     private final ServerListManager serverListManager;
-    
+
     private final ServiceInfoUpdateService serviceInfoUpdateService;
-    
+
     private final ServiceInfoHolder serviceInfoHolder;
-    
+
     private final NamingHttpClientProxy httpClientProxy;
-    
+
     private final NamingGrpcClientProxy grpcClientProxy;
-    
+
     private final SecurityProxy securityProxy;
-    
+
     private ScheduledExecutorService executorService;
-    
+
     public NamingClientProxyDelegate(String namespace, ServiceInfoHolder serviceInfoHolder,
-            NacosClientProperties properties, InstancesChangeNotifier changeNotifier) throws NacosException {
+                                     NacosClientProperties properties, InstancesChangeNotifier changeNotifier) throws NacosException {
         this.serviceInfoUpdateService = new ServiceInfoUpdateService(properties, serviceInfoHolder, this,
                 changeNotifier);
         this.serverListManager = new ServerListManager(properties, namespace);
@@ -80,7 +80,7 @@ public class NamingClientProxyDelegate implements NamingClientProxy {
         this.grpcClientProxy = new NamingGrpcClientProxy(namespace, securityProxy, serverListManager, properties,
                 serviceInfoHolder);
     }
-    
+
     private void initSecurityProxy(NacosClientProperties properties) {
         this.executorService = new ScheduledThreadPoolExecutor(1,
                 new NameThreadFactory("com.alibaba.nacos.client.naming.security"));
@@ -89,12 +89,14 @@ public class NamingClientProxyDelegate implements NamingClientProxy {
         this.executorService.scheduleWithFixedDelay(() -> securityProxy.login(nacosClientPropertiesView), 0,
                 SECURITY_INFO_REFRESH_INTERVAL_MILLS, TimeUnit.MILLISECONDS);
     }
-    
+
     @Override
     public void registerService(String serviceName, String groupName, Instance instance) throws NacosException {
+        // 根据是否是临时实例，选择不同的代理类去注册   grpcClientProxy or  httpClientProxy
+        // TODO 进入
         getExecuteClientProxy(instance).registerService(serviceName, groupName, instance);
     }
-    
+
     @Override
     public void batchRegisterService(String serviceName, String groupName, List<Instance> instances)
             throws NacosException {
@@ -105,7 +107,7 @@ public class NamingClientProxyDelegate implements NamingClientProxy {
         grpcClientProxy.batchRegisterService(serviceName, groupName, instances);
         NAMING_LOGGER.info("batchRegisterInstance instances: {} ,serviceName: {} finish.", instances, serviceName);
     }
-    
+
     @Override
     public void batchDeregisterService(String serviceName, String groupName, List<Instance> instances)
             throws NacosException {
@@ -116,49 +118,49 @@ public class NamingClientProxyDelegate implements NamingClientProxy {
         grpcClientProxy.batchDeregisterService(serviceName, groupName, instances);
         NAMING_LOGGER.info("batch DeregisterInstance instances: {} ,serviceName: {} finish.", instances, serviceName);
     }
-    
+
     @Override
     public void deregisterService(String serviceName, String groupName, Instance instance) throws NacosException {
         getExecuteClientProxy(instance).deregisterService(serviceName, groupName, instance);
     }
-    
+
     @Override
     public void updateInstance(String serviceName, String groupName, Instance instance) throws NacosException {
-    
+
     }
-    
+
     @Override
     public ServiceInfo queryInstancesOfService(String serviceName, String groupName, String clusters,
-            boolean healthyOnly) throws NacosException {
+                                               boolean healthyOnly) throws NacosException {
         return grpcClientProxy.queryInstancesOfService(serviceName, groupName, clusters, healthyOnly);
     }
-    
+
     @Override
     public Service queryService(String serviceName, String groupName) throws NacosException {
         return null;
     }
-    
+
     @Override
     public void createService(Service service, AbstractSelector selector) throws NacosException {
-    
+
     }
-    
+
     @Override
     public boolean deleteService(String serviceName, String groupName) throws NacosException {
         return false;
     }
-    
+
     @Override
     public void updateService(Service service, AbstractSelector selector) throws NacosException {
-    
+
     }
-    
+
     @Override
     public ListView<String> getServiceList(int pageNo, int pageSize, String groupName, AbstractSelector selector)
             throws NacosException {
         return grpcClientProxy.getServiceList(pageNo, pageSize, groupName, selector);
     }
-    
+
     @Override
     public ServiceInfo subscribe(String serviceName, String groupName, String clusters) throws NacosException {
         NAMING_LOGGER.info("[SUBSCRIBE-SERVICE] service:{}, group:{}, clusters:{} ", serviceName, groupName, clusters);
@@ -172,7 +174,7 @@ public class NamingClientProxyDelegate implements NamingClientProxy {
         serviceInfoHolder.processServiceInfo(result);
         return result;
     }
-    
+
     @Override
     public void unsubscribe(String serviceName, String groupName, String clusters) throws NacosException {
         NAMING_LOGGER.debug("[UNSUBSCRIBE-SERVICE] service:{}, group:{}, cluster:{} ", serviceName, groupName,
@@ -180,24 +182,29 @@ public class NamingClientProxyDelegate implements NamingClientProxy {
         serviceInfoUpdateService.stopUpdateIfContain(serviceName, groupName, clusters);
         grpcClientProxy.unsubscribe(serviceName, groupName, clusters);
     }
-    
+
     @Override
     public boolean isSubscribed(String serviceName, String groupName, String clusters) throws NacosException {
         return grpcClientProxy.isSubscribed(serviceName, groupName, clusters);
     }
-    
+
     @Override
     public boolean serverHealthy() {
         return grpcClientProxy.serverHealthy() || httpClientProxy.serverHealthy();
     }
-    
+
     private NamingClientProxy getExecuteClientProxy(Instance instance) {
+        // 如果是临时实例，使用grpc方式，否则使用http方式
+        // ephemeral默认为true,也就是返回grpcClientProxy,Nacos 2.0版本将http的请求换成了gRpc了
+
+        // 临时instance：gRPC长连接
+        // 持久instance：http短连接
         if (instance.isEphemeral() || grpcClientProxy.isAbilitySupportedByServer(AbilityKey.SERVER_SUPPORT_PERSISTENT_INSTANCE_BY_GRPC)) {
             return grpcClientProxy;
         }
         return httpClientProxy;
     }
-    
+
     @Override
     public void shutdown() throws NacosException {
         String className = this.getClass().getName();
