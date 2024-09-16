@@ -91,6 +91,8 @@ public class EphemeralClientOperationServiceImpl implements ClientOperationServi
         client.setLastUpdatedTime();
         client.recalculateRevision();
         // 发布客户端注册事件通知订阅者, Nacos使用了发布-订阅模式来处理. 简单理解就是，事件发布器发布相应的事件，然后对事件感兴趣的订阅者就会进行相应的处理，解耦
+        // TODO ClientServiceIndexesManager监听该事件  并且该类有一个map <服务,该服务的客户端列表>
+        // TODO 进入 ClientServiceIndexesManager#handleClientOperation
         NotifyCenter.publishEvent(new ClientOperationEvent.ClientRegisterServiceEvent(singleton, clientId));
         // 发布实例元数据事件通知订阅者
         NotifyCenter

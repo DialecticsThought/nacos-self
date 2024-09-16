@@ -39,26 +39,37 @@ import static com.alibaba.nacos.common.notify.NotifyCenter.ringBufferSize;
  * @author zongtanghu
  */
 public class DefaultPublisher extends Thread implements EventPublisher {
-    
+
     protected static final Logger LOGGER = LoggerFactory.getLogger(NotifyCenter.class);
-    
+    /**
+     * 标识事件发布者是否初始化的状态位
+     */
     private volatile boolean initialized = false;
-    
+
+    /**
+     * 标识事件发布者是否关闭的状态位
+     */
     private volatile boolean shutdown = false;
-    
+
+
+    /**
+     * 事件类型，其非集合，说明一个线程只能绑定一种事件类型
+     */
     private Class<? extends Event> eventType;
-    
+    /**
+     * 监听这种事件的订阅者集合
+     */
     protected final ConcurrentHashSet<Subscriber> subscribers = new ConcurrentHashSet<>();
-    
+
     private int queueMaxSize = -1;
-    
+
     private BlockingQueue<Event> queue;
-    
+
     protected volatile Long lastEventSequence = -1L;
-    
+
     private static final AtomicReferenceFieldUpdater<DefaultPublisher, Long> UPDATER = AtomicReferenceFieldUpdater
             .newUpdater(DefaultPublisher.class, Long.class, "lastEventSequence");
-    
+
     @Override
     public void init(Class<? extends Event> type, int bufferSize) {
         setDaemon(true);
@@ -71,11 +82,11 @@ public class DefaultPublisher extends Thread implements EventPublisher {
         this.queue = new ArrayBlockingQueue<>(this.queueMaxSize);
         start();
     }
-    
+
     public ConcurrentHashSet<Subscriber> getSubscribers() {
         return subscribers;
     }
-    
+
     @Override
     public synchronized void start() {
         if (!initialized) {
@@ -84,20 +95,20 @@ public class DefaultPublisher extends Thread implements EventPublisher {
             initialized = true;
         }
     }
-    
+
     @Override
     public long currentEventSize() {
         return queue.size();
     }
-    
+
     @Override
     public void run() {
         openEventHandler();
     }
-    
+
     void openEventHandler() {
         try {
-            
+
             // This variable is defined to resolve the problem which message overstock in the queue.
             int waitTimes = 60;
             // To ensure that messages are not lost, enable EventHandler when
@@ -116,21 +127,21 @@ public class DefaultPublisher extends Thread implements EventPublisher {
             LOGGER.error("Event listener exception : ", ex);
         }
     }
-    
+
     private boolean hasSubscriber() {
         return CollectionUtils.isNotEmpty(subscribers);
     }
-    
+
     @Override
     public void addSubscriber(Subscriber subscriber) {
         subscribers.add(subscriber);
     }
-    
+
     @Override
     public void removeSubscriber(Subscriber subscriber) {
         subscribers.remove(subscriber);
     }
-    
+
     @Override
     public boolean publish(Event event) {
         checkIsStart();
@@ -142,23 +153,23 @@ public class DefaultPublisher extends Thread implements EventPublisher {
         }
         return true;
     }
-    
+
     void checkIsStart() {
         if (!initialized) {
             throw new IllegalStateException("Publisher does not start");
         }
     }
-    
+
     @Override
     public void shutdown() {
         this.shutdown = true;
         this.queue.clear();
     }
-    
+
     public boolean isInitialized() {
         return initialized;
     }
-    
+
     /**
      * Receive and notifySubscriber to process the event.
      *
@@ -166,39 +177,39 @@ public class DefaultPublisher extends Thread implements EventPublisher {
      */
     void receiveEvent(Event event) {
         final long currentEventSequence = event.sequence();
-        
+
         if (!hasSubscriber()) {
             LOGGER.warn("[NotifyCenter] the {} is lost, because there is no subscriber.", event);
             return;
         }
-        
+
         // Notification single event listener
         for (Subscriber subscriber : subscribers) {
             if (!subscriber.scopeMatches(event)) {
                 continue;
             }
-            
+
             // Whether to ignore expiration events
             if (subscriber.ignoreExpireEvent() && lastEventSequence > currentEventSequence) {
                 LOGGER.debug("[NotifyCenter] the {} is unacceptable to this subscriber, because had expire",
                         event.getClass());
                 continue;
             }
-            
+
             // Because unifying smartSubscriber and subscriber, so here need to think of compatibility.
             // Remove original judge part of codes.
             notifySubscriber(subscriber, event);
         }
     }
-    
+
     @Override
     public void notifySubscriber(final Subscriber subscriber, final Event event) {
-        
+
         LOGGER.debug("[NotifyCenter] the {} will received by {}", event, subscriber);
-        
+
         final Runnable job = () -> subscriber.onEvent(event);
         final Executor executor = subscriber.executor();
-        
+
         if (executor != null) {
             executor.execute(job);
         } else {
