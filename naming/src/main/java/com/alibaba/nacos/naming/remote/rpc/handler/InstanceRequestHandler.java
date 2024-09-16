@@ -43,24 +43,28 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class InstanceRequestHandler extends RequestHandler<InstanceRequest, InstanceResponse> {
-    
+
     private final EphemeralClientOperationServiceImpl clientOperationService;
-    
+
     public InstanceRequestHandler(EphemeralClientOperationServiceImpl clientOperationService) {
         this.clientOperationService = clientOperationService;
     }
-    
+
     @Override
     @TpsControl(pointName = "RemoteNamingInstanceRegisterDeregister", name = "RemoteNamingInstanceRegisterDeregister")
     @Secured(action = ActionTypes.WRITE)
     @ExtractorManager.Extractor(rpcExtractor = InstanceRequestParamExtractor.class)
     public InstanceResponse handle(InstanceRequest request, RequestMeta meta) throws NacosException {
+        // 根据命名空间ID、组名、服务名、是否临时实例（默认为true）创建一个Service
         Service service = Service
                 .newService(request.getNamespace(), request.getGroupName(), request.getServiceName(), true);
         InstanceUtil.setInstanceIdIfEmpty(request.getInstance(), service.getGroupedServiceName());
+        // 根据客户端请求类型进行不同的处理： 注册 or 下线
         switch (request.getType()) {
+            // 处理注册实例请求
             case NamingRemoteConstants.REGISTER_INSTANCE:
                 return registerInstance(service, request, meta);
+            // 处理下线实例请求
             case NamingRemoteConstants.DE_REGISTER_INSTANCE:
                 return deregisterInstance(service, request, meta);
             default:
@@ -68,16 +72,21 @@ public class InstanceRequestHandler extends RequestHandler<InstanceRequest, Inst
                         String.format("Unsupported request type %s", request.getType()));
         }
     }
-    
+
     private InstanceResponse registerInstance(Service service, InstanceRequest request, RequestMeta meta)
             throws NacosException {
+        // 注册实例
+        // service: Service{namespace='public', group='DEFAULT_GROUP', name='discovery-provider', ephemeral=true, revision=0}
+        // instance: Instance{instanceId='null', ip='172.110.0.134', port=1001, weight=1.0, healthy=true, enabled=true, ephemeral=true, clusterName='DEFAULT', serviceName='null', metadata={preserved.register.source=SPRING_CLOUD}}
+        // TODO 进入 该方法
         clientOperationService.registerInstance(service, request.getInstance(), meta.getConnectionId());
+        // 发布注册实例跟踪事件
         NotifyCenter.publishEvent(new RegisterInstanceTraceEvent(System.currentTimeMillis(),
                 meta.getClientIp(), true, service.getNamespace(), service.getGroup(), service.getName(),
                 request.getInstance().getIp(), request.getInstance().getPort()));
         return new InstanceResponse(NamingRemoteConstants.REGISTER_INSTANCE);
     }
-    
+
     private InstanceResponse deregisterInstance(Service service, InstanceRequest request, RequestMeta meta) {
         clientOperationService.deregisterInstance(service, request.getInstance(), meta.getConnectionId());
         NotifyCenter.publishEvent(new DeregisterInstanceTraceEvent(System.currentTimeMillis(),
@@ -85,5 +94,5 @@ public class InstanceRequestHandler extends RequestHandler<InstanceRequest, Inst
                 service.getGroup(), service.getName(), request.getInstance().getIp(), request.getInstance().getPort()));
         return new InstanceResponse(NamingRemoteConstants.DE_REGISTER_INSTANCE);
     }
-    
+
 }

@@ -52,54 +52,57 @@ import java.util.concurrent.TimeUnit;
  * @version $Id: BaseGrpcServer.java, v 0.1 2020年07月13日 3:42 PM liuzunfei Exp $
  */
 public abstract class BaseGrpcServer extends BaseRpcServer {
-    
+
     private Server server;
-    
+
     @Autowired
     private GrpcRequestAcceptor grpcCommonRequestAcceptor;
-    
+
     @Autowired
     private GrpcBiStreamRequestAcceptor grpcBiStreamRequestAcceptor;
-    
+
     @Autowired
     private ConnectionManager connectionManager;
-    
+
     @Override
     public ConnectionType getConnectionType() {
         return ConnectionType.GRPC;
     }
-    
+
     @Override
     public void startServer() throws Exception {
         final MutableHandlerRegistry handlerRegistry = new MutableHandlerRegistry();
+        // 注册服务
+        // TODO 进入
         addServices(handlerRegistry, getSeverInterceptors().toArray(new ServerInterceptor[0]));
         NettyServerBuilder builder = NettyServerBuilder.forPort(getServicePort()).executor(getRpcExecutor());
-        
+
         Optional<InternalProtocolNegotiator.ProtocolNegotiator> negotiator = newProtocolNegotiator();
         if (negotiator.isPresent()) {
             InternalProtocolNegotiator.ProtocolNegotiator actual = negotiator.get();
             Loggers.REMOTE.info("Add protocol negotiator {}", actual.getClass().getCanonicalName());
             builder.protocolNegotiator(actual);
         }
-        
+
         for (ServerTransportFilter each : getServerTransportFilters()) {
             builder.addTransportFilter(each);
         }
+        // 创建Grpc的server端
         server = builder.maxInboundMessageSize(getMaxInboundMessageSize()).fallbackHandlerRegistry(handlerRegistry)
                 .compressorRegistry(CompressorRegistry.getDefaultInstance())
                 .decompressorRegistry(DecompressorRegistry.getDefaultInstance())
                 .keepAliveTime(getKeepAliveTime(), TimeUnit.MILLISECONDS)
                 .keepAliveTimeout(getKeepAliveTimeout(), TimeUnit.MILLISECONDS)
                 .permitKeepAliveTime(getPermitKeepAliveTime(), TimeUnit.MILLISECONDS).build();
-        
+        // 启动Grpc的server端
         server.start();
     }
-    
+
     @Override
     public void reloadProtocolContext() {
         reloadProtocolNegotiator();
     }
-    
+
     /**
      * Build new one protocol negotiator.
      *
@@ -110,25 +113,25 @@ public abstract class BaseGrpcServer extends BaseRpcServer {
     protected Optional<InternalProtocolNegotiator.ProtocolNegotiator> newProtocolNegotiator() {
         return Optional.empty();
     }
-    
+
     /**
      * reload protocol negotiator If necessary.
      */
     public void reloadProtocolNegotiator() {
     }
-    
+
     protected long getPermitKeepAliveTime() {
         return GrpcServerConstants.GrpcConfig.DEFAULT_GRPC_PERMIT_KEEP_ALIVE_TIME;
     }
-    
+
     protected long getKeepAliveTime() {
         return GrpcServerConstants.GrpcConfig.DEFAULT_GRPC_KEEP_ALIVE_TIME;
     }
-    
+
     protected long getKeepAliveTimeout() {
         return GrpcServerConstants.GrpcConfig.DEFAULT_GRPC_KEEP_ALIVE_TIMEOUT;
     }
-    
+
     protected int getMaxInboundMessageSize() {
         Integer property = EnvUtil
                 .getProperty(GrpcServerConstants.GrpcConfig.MAX_INBOUND_MSG_SIZE_PROPERTY, Integer.class);
@@ -137,19 +140,19 @@ public abstract class BaseGrpcServer extends BaseRpcServer {
         }
         return GrpcServerConstants.GrpcConfig.DEFAULT_GRPC_MAX_INBOUND_MSG_SIZE;
     }
-    
+
     protected List<ServerInterceptor> getSeverInterceptors() {
         List<ServerInterceptor> result = new LinkedList<>();
         result.add(new GrpcConnectionInterceptor());
         return result;
     }
-    
+
     protected List<ServerTransportFilter> getServerTransportFilters() {
         return Collections.singletonList(new AddressTransportFilter(connectionManager));
     }
-    
+
     private void addServices(MutableHandlerRegistry handlerRegistry, ServerInterceptor... serverInterceptor) {
-        
+
         // unary common call register.
         final MethodDescriptor<Payload, Payload> unaryPayloadMethod = MethodDescriptor.<Payload, Payload>newBuilder()
                 .setType(MethodDescriptor.MethodType.UNARY).setFullMethodName(MethodDescriptor
@@ -157,45 +160,46 @@ public abstract class BaseGrpcServer extends BaseRpcServer {
                                 GrpcServerConstants.REQUEST_METHOD_NAME))
                 .setRequestMarshaller(ProtoUtils.marshaller(Payload.getDefaultInstance()))
                 .setResponseMarshaller(ProtoUtils.marshaller(Payload.getDefaultInstance())).build();
-        
+        // 处理类
         final ServerCallHandler<Payload, Payload> payloadHandler = ServerCalls.asyncUnaryCall(
+                // TODO 进入  grpcCommonRequestAcceptor.request
                 (request, responseObserver) -> grpcCommonRequestAcceptor.request(request, responseObserver));
-        
+
         final ServerServiceDefinition serviceDefOfUnaryPayload = ServerServiceDefinition
                 .builder(GrpcServerConstants.REQUEST_SERVICE_NAME).addMethod(unaryPayloadMethod, payloadHandler)
                 .build();
         handlerRegistry.addService(ServerInterceptors.intercept(serviceDefOfUnaryPayload, serverInterceptor));
-        
+
         // bi stream register.
         final ServerCallHandler<Payload, Payload> biStreamHandler = ServerCalls.asyncBidiStreamingCall(
                 (responseObserver) -> grpcBiStreamRequestAcceptor.requestBiStream(responseObserver));
-        
+
         final MethodDescriptor<Payload, Payload> biStreamMethod = MethodDescriptor.<Payload, Payload>newBuilder()
                 .setType(MethodDescriptor.MethodType.BIDI_STREAMING).setFullMethodName(MethodDescriptor
                         .generateFullMethodName(GrpcServerConstants.REQUEST_BI_STREAM_SERVICE_NAME,
                                 GrpcServerConstants.REQUEST_BI_STREAM_METHOD_NAME))
                 .setRequestMarshaller(ProtoUtils.marshaller(Payload.newBuilder().build()))
                 .setResponseMarshaller(ProtoUtils.marshaller(Payload.getDefaultInstance())).build();
-        
+
         final ServerServiceDefinition serviceDefOfBiStream = ServerServiceDefinition
                 .builder(GrpcServerConstants.REQUEST_BI_STREAM_SERVICE_NAME).addMethod(biStreamMethod, biStreamHandler)
                 .build();
         handlerRegistry.addService(ServerInterceptors.intercept(serviceDefOfBiStream, serverInterceptor));
-        
+
     }
-    
+
     @Override
     public void shutdownServer() {
         if (server != null) {
             server.shutdownNow();
         }
     }
-    
+
     /**
      * get rpc executor.
      *
      * @return executor.
      */
     public abstract ThreadPoolExecutor getRpcExecutor();
-    
+
 }
