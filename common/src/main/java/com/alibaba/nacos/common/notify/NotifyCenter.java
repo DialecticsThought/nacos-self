@@ -312,11 +312,20 @@ public class NotifyCenter {
         if (ClassUtils.isAssignableFrom(SlowEvent.class, eventType)) {
             return INSTANCE.sharePublisher.publish(event);
         }
-
+        /**
+         * 以Nacos服务端处理客户端提交的服务注册请求过程中的一个事件为例来分析
+         * EphemeralClientOperationServiceImpl#registerInstance方法中执行了
+         * NotifyCenter.publishEvent(new ClientOperationEvent.ClientRegisterServiceEvent(singleton, clientId));
+         */
+        // topic = com.alibaba.nacos.naming.core.v2.event.client.ClientOperationEvent.ClientRegisterServiceEven
         final String topic = ClassUtils.getCanonicalName(eventType);
-
+        // 获取对应的EventPublisher进行发布，也就是通知订阅者去处理
+        // Map<String, EventPublisher> publisherMap = new ConcurrentHashMap<>(16)
+        // INSTANCE.publisherMap就是事件发布器管理容器
         EventPublisher publisher = INSTANCE.publisherMap.get(topic);
         if (publisher != null) {
+            // 调用publish()发布事件
+            // TODO 进入
             return publisher.publish(event);
         }
         if (event.isPluginEvent()) {

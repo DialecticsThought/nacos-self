@@ -60,11 +60,17 @@ public class DefaultPublisher extends Thread implements EventPublisher {
      * 监听这种事件的订阅者集合
      */
     protected final ConcurrentHashSet<Subscriber> subscribers = new ConcurrentHashSet<>();
-
+    /**
+     * 阻塞队列大小
+     */
     private int queueMaxSize = -1;
-
+    /**
+     * 阻塞队列
+     */
     private BlockingQueue<Event> queue;
-
+    /**
+     * 最大的事件序号，事件每次产生都会有个事件序号
+     */
     protected volatile Long lastEventSequence = -1L;
 
     private static final AtomicReferenceFieldUpdater<DefaultPublisher, Long> UPDATER = AtomicReferenceFieldUpdater
@@ -72,14 +78,21 @@ public class DefaultPublisher extends Thread implements EventPublisher {
 
     @Override
     public void init(Class<? extends Event> type, int bufferSize) {
+
+        // 设置后台守护线程，当服务关闭的时候会自动关闭
         setDaemon(true);
+        // 设置线程的名称，当我们打印JVM线程的时候可以快速查找到
         setName("nacos.publisher-" + type.getName());
+        // 指定事件类型
         this.eventType = type;
+        // 指定阻塞队列的大小
         this.queueMaxSize = bufferSize;
         if (this.queueMaxSize == -1) {
             this.queueMaxSize = ringBufferSize;
         }
+        // 初始化阻塞队列
         this.queue = new ArrayBlockingQueue<>(this.queueMaxSize);
+        // 启动线程
         start();
     }
 
@@ -89,9 +102,13 @@ public class DefaultPublisher extends Thread implements EventPublisher {
 
     @Override
     public synchronized void start() {
-        if (!initialized) {
+        // initialized变量使用volatile修饰，保证可见性，其它线程能及时发现initialized已经被改为true
+
+        if (!initialized) {// 保证只启动一次，调用父类，告诉JVM去进行线程启动
             // start just called once
+            // TODO 进入
             super.start();
+            // 线程启动后，将initialized置为true，保证只会启动一次
             initialized = true;
         }
     }
@@ -101,6 +118,9 @@ public class DefaultPublisher extends Thread implements EventPublisher {
         return queue.size();
     }
 
+    /**
+     * TODO 重点
+     */
     @Override
     public void run() {
         openEventHandler();
@@ -117,9 +137,14 @@ public class DefaultPublisher extends Thread implements EventPublisher {
                 ThreadUtils.sleep(1000L);
                 waitTimes--;
             }
-
+            // shutdown初始值为false，执行一个死循环，一直运行在后台，直到在shutdown()方法中将shutdown置为true，才会停止
+            // 当然，如果阻塞队列中没有任务的话，线程会被阻塞，阻塞队列的线程是不占用CPU资源的，也就是占了一部分空间和资源
             while (!shutdown) {
+
+                // 阻塞队列中如果没有事件，这里进行阻塞
                 final Event event = queue.take();
+                // 获取到事件进行处理. 当阻塞队列中有数据的时候，就会立马触发获取到队列元素，开始处理
+                // TODO 进入
                 receiveEvent(event);
                 UPDATER.compareAndSet(this, lastEventSequence, Math.max(lastEventSequence, event.sequence()));
             }
@@ -144,8 +169,11 @@ public class DefaultPublisher extends Thread implements EventPublisher {
 
     @Override
     public boolean publish(Event event) {
+        // 校验publisher是否初始化
         checkIsStart();
+        // 将事件存入阻塞队列中，这样订阅者就可以从队列中取出任务执行
         boolean success = this.queue.offer(event);
+        // 如果存入队列失败，则直接通知订阅者处理事件
         if (!success) {
             LOGGER.warn("Unable to plug in due to interruption, synchronize sending time, event : {}", event);
             receiveEvent(event);
@@ -172,12 +200,12 @@ public class DefaultPublisher extends Thread implements EventPublisher {
 
     /**
      * Receive and notifySubscriber to process the event.
-     *
+     * 接收事件,并通知订阅者处理事件
      * @param event {@link Event}.
      */
     void receiveEvent(Event event) {
         final long currentEventSequence = event.sequence();
-
+        // 没有订阅者，则直接返回
         if (!hasSubscriber()) {
             LOGGER.warn("[NotifyCenter] the {} is lost, because there is no subscriber.", event);
             return;
@@ -185,11 +213,13 @@ public class DefaultPublisher extends Thread implements EventPublisher {
 
         // Notification single event listener
         for (Subscriber subscriber : subscribers) {
+            // 判断事件是否匹配，跳过不匹配的那些订阅者，不进行处理
             if (!subscriber.scopeMatches(event)) {
                 continue;
             }
 
             // Whether to ignore expiration events
+            // 是否忽略过期的事件
             if (subscriber.ignoreExpireEvent() && lastEventSequence > currentEventSequence) {
                 LOGGER.debug("[NotifyCenter] the {} is unacceptable to this subscriber, because had expire",
                         event.getClass());
@@ -198,6 +228,7 @@ public class DefaultPublisher extends Thread implements EventPublisher {
 
             // Because unifying smartSubscriber and subscriber, so here need to think of compatibility.
             // Remove original judge part of codes.
+            // TODO 进入
             notifySubscriber(subscriber, event);
         }
     }
@@ -206,14 +237,17 @@ public class DefaultPublisher extends Thread implements EventPublisher {
     public void notifySubscriber(final Subscriber subscriber, final Event event) {
 
         LOGGER.debug("[NotifyCenter] the {} will received by {}", event, subscriber);
-
+        // 包装成一个任务去处理事件
         final Runnable job = () -> subscriber.onEvent(event);
+        // 支持配置线程池，很灵活，让每个订阅者决定是同步调用还是异步调用
         final Executor executor = subscriber.executor();
 
         if (executor != null) {
+            // 如果订阅者指定了线程池，将Runnable放入线程池，等待异步执行
             executor.execute(job);
         } else {
             try {
+                // 直接调用方法，即同步调用
                 job.run();
             } catch (Throwable e) {
                 LOGGER.error("Event callback exception: ", e);

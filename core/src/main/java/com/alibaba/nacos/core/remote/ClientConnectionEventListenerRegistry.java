@@ -30,16 +30,16 @@ import java.util.List;
  */
 @Service
 public class ClientConnectionEventListenerRegistry {
-    
+
     final List<ClientConnectionEventListener> clientConnectionEventListeners = new ArrayList<>();
-    
+
     /**
      * notify where a new client connected.
      *
      * @param connection connection that new created.
      */
     public void notifyClientConnected(final Connection connection) {
-        
+
         for (ClientConnectionEventListener clientConnectionEventListener : clientConnectionEventListeners) {
             try {
                 clientConnectionEventListener.clientConnected(connection);
@@ -47,30 +47,31 @@ public class ClientConnectionEventListenerRegistry {
                 Loggers.REMOTE
                         .info("[NotifyClientConnected] failed for listener {}", clientConnectionEventListener.getName(),
                                 throwable);
-                
+
             }
         }
-        
+
     }
-    
+
     /**
      * notify where a new client disconnected.
      *
      * @param connection connection that disconnected.
      */
     public void notifyClientDisConnected(final Connection connection) {
-        
+
         for (ClientConnectionEventListener clientConnectionEventListener : clientConnectionEventListeners) {
             try {
+                // TODO 查看这个事件的处理者ConnectionBasedClientManager#clientDisConnected()方法
                 clientConnectionEventListener.clientDisConnected(connection);
             } catch (Throwable throwable) {
                 Loggers.REMOTE.info("[NotifyClientDisConnected] failed for listener {}",
                         clientConnectionEventListener.getName(), throwable);
             }
         }
-        
+
     }
-    
+
     /**
      * register ClientConnectionEventListener.
      *
@@ -81,5 +82,5 @@ public class ClientConnectionEventListenerRegistry {
                 .getSimpleName());
         this.clientConnectionEventListeners.add(listener);
     }
-    
+
 }

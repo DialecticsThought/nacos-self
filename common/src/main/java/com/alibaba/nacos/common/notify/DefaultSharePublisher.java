@@ -31,18 +31,21 @@ import java.util.concurrent.locks.ReentrantLock;
  * @author zongtanghu
  */
 public class DefaultSharePublisher extends DefaultPublisher implements ShardedEventPublisher {
-    
+    /**
+     * key是SlowEvent, value是Set<Subscriber>
+     * 每一种事件，一个Set，共享同一个DefaultSharePublisher，处理比较耗时的一些事件（SlowEvent事件类型）
+     */
     private final Map<Class<? extends SlowEvent>, Set<Subscriber>> subMappings = new ConcurrentHashMap<>();
-    
+
     private final Lock lock = new ReentrantLock();
-    
+
     @Override
     public void addSubscriber(Subscriber subscriber, Class<? extends Event> subscribeType) {
         // Actually, do a classification based on the slowEvent type.
         Class<? extends SlowEvent> subSlowEventType = (Class<? extends SlowEvent>) subscribeType;
         // For stop waiting subscriber, see {@link DefaultPublisher#openEventHandler}.
         subscribers.add(subscriber);
-        
+
         lock.lock();
         try {
             Set<Subscriber> sets = subMappings.get(subSlowEventType);
@@ -57,18 +60,18 @@ public class DefaultSharePublisher extends DefaultPublisher implements ShardedEv
             lock.unlock();
         }
     }
-    
+
     @Override
     public void removeSubscriber(Subscriber subscriber, Class<? extends Event> subscribeType) {
         // Actually, do a classification based on the slowEvent type.
         Class<? extends SlowEvent> subSlowEventType = (Class<? extends SlowEvent>) subscribeType;
         // For removing to parent class attributes synchronization.
         subscribers.remove(subscriber);
-        
+
         lock.lock();
         try {
             Set<Subscriber> sets = subMappings.get(subSlowEventType);
-            
+
             if (sets != null) {
                 sets.remove(subscriber);
             }
@@ -76,21 +79,21 @@ public class DefaultSharePublisher extends DefaultPublisher implements ShardedEv
             lock.unlock();
         }
     }
-    
+
     @Override
     public void receiveEvent(Event event) {
-        
+
         final long currentEventSequence = event.sequence();
         // get subscriber set based on the slow EventType.
         final Class<? extends SlowEvent> slowEventType = (Class<? extends SlowEvent>) event.getClass();
-        
+
         // Get for Map, the algorithm is O(1).
         Set<Subscriber> subscribers = subMappings.get(slowEventType);
         if (null == subscribers) {
             LOGGER.debug("[NotifyCenter] No subscribers for slow event {}", slowEventType.getName());
             return;
         }
-        
+
         // Notification single event subscriber
         for (Subscriber subscriber : subscribers) {
             // Whether to ignore expiration events
@@ -99,7 +102,7 @@ public class DefaultSharePublisher extends DefaultPublisher implements ShardedEv
                         event.getClass());
                 continue;
             }
-            
+
             // Notify single subscriber for slow event.
             notifySubscriber(subscriber, event);
         }

@@ -95,6 +95,7 @@ public class ConnectionBasedClientManager extends ClientConnectionEventListener 
 
     @Override
     public void clientDisConnected(Connection connect) {
+        // TODO 进入
         clientDisconnected(connect.getMetaInfo().getConnectionId());
     }
 
@@ -107,17 +108,18 @@ public class ConnectionBasedClientManager extends ClientConnectionEventListener 
         }
         client.release();
         boolean isResponsible = isResponsibleClient(client);
-        // 发布客户端释放连接事件
         /**
-         * 具体处理是在：{@link com.alibaba.nacos.naming.core.v2.index.ClientServiceIndexesManager.onEvent}
+         *  发布客户端释放连接事件
+         * 具体处理是在：{@link com.alibaba.nacos.naming.core.v2.index.ClientServiceIndexesManager.onEvent}  TODO 查看
          * 主要做了下面几个事情：
          * 1、从订阅者列表中移除所有服务对这个客户端的引用
          * 2、从发布者列表中移除所有服务对这个客户端的引用
          */
         NotifyCenter.publishEvent(new ClientOperationEvent.ClientReleaseEvent(client, isResponsible));
-        // 发布客户端断开连接事件
+
         /**
-         * 具体处理是在：{@link com.alibaba.nacos.naming.core.v2.metadata.NamingMetadataManager.onEvent}
+         * 发布客户端断开连接事件
+         * 具体处理是在：{@link com.alibaba.nacos.naming.core.v2.metadata.NamingMetadataManager.onEvent} TODO 查看
          * 主要做了下面几个事情：
          * 1、将服务实例元数据添加到过期集合中
          */

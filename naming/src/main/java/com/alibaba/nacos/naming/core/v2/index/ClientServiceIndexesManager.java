@@ -55,9 +55,9 @@ public class ClientServiceIndexesManager extends SmartSubscriber {
     private final ConcurrentMap<Service, Set<String>> subscriberIndexes = new ConcurrentHashMap<>();
 
     public ClientServiceIndexesManager() {
-        // 向NotifyCenter中注册自己
+        // TODO 向NotifyCenter中注册自己
         // NamingEventPublisherFactory.getInstance()也是用到了单例，返回了NamingEventPublisherFactory
-        //TODO 进入
+        // TODO 进入
         NotifyCenter.registerSubscriber(this, NamingEventPublisherFactory.getInstance());
     }
 
@@ -140,7 +140,7 @@ public class ClientServiceIndexesManager extends SmartSubscriber {
         String clientId = event.getClientId();
         if (event instanceof ClientOperationEvent.ClientRegisterServiceEvent) {
             // 处理ClientRegisterServiceEvent事件（服务注册)
-            //TODO 进入
+            // TODO 进入 以服务注册为例
             addPublisherIndexes(service, clientId);
         } else if (event instanceof ClientOperationEvent.ClientDeregisterServiceEvent) {
             // 处理ClientDeregisterServiceEvent事件（服务下线）
