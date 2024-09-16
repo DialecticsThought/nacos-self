@@ -35,7 +35,7 @@ import java.io.IOException;
  */
 @ControllerAdvice
 public class GlobalExceptionHandler {
-    
+
     /**
      * For IllegalArgumentException, we are returning void with status code as 400, so our error-page will be used in
      * this case.
@@ -47,11 +47,11 @@ public class GlobalExceptionHandler {
         MetricsMonitor.getIllegalArgumentException().increment();
         return ResponseEntity.status(400).body(ExceptionUtil.getAllExceptionMsg(ex));
     }
-    
+
     /**
      * For NacosRuntimeException.
      *
-     * @throws com.alibaba.nacos.api.exception.runtime.NacosRuntimeException NacosRuntimeException.
+     * @throws NacosRuntimeException NacosRuntimeException.
      */
     @ExceptionHandler(NacosRuntimeException.class)
     public ResponseEntity<String> handleNacosRunTimeException(NacosRuntimeException ex) throws IOException {

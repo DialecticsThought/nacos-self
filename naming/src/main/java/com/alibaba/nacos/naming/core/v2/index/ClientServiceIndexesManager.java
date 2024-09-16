@@ -41,30 +41,38 @@ import java.util.concurrent.ConcurrentMap;
  * Client and service index manager.
  *
  * @author xiweng.yy
+ * TODO
+ * 他实现了 SmartSubscriber 接口 是订阅者
+ * 既然是订阅者，查看onEvent方法 因为有事件的话publisher会执行subscriber的onEvent
  */
 @Component
 public class ClientServiceIndexesManager extends SmartSubscriber {
-    
+    /**
+     * 服务与发布这个服务的客户端的关联关系
+     */
     private final ConcurrentMap<Service, Set<String>> publisherIndexes = new ConcurrentHashMap<>();
-    
+
     private final ConcurrentMap<Service, Set<String>> subscriberIndexes = new ConcurrentHashMap<>();
-    
+
     public ClientServiceIndexesManager() {
+        // 向NotifyCenter中注册自己
+        // NamingEventPublisherFactory.getInstance()也是用到了单例，返回了NamingEventPublisherFactory
+        //TODO 进入
         NotifyCenter.registerSubscriber(this, NamingEventPublisherFactory.getInstance());
     }
-    
+
     public Collection<String> getAllClientsRegisteredService(Service service) {
         return publisherIndexes.containsKey(service) ? publisherIndexes.get(service) : new ConcurrentHashSet<>();
     }
-    
+
     public Collection<String> getAllClientsSubscribeService(Service service) {
         return subscriberIndexes.containsKey(service) ? subscriberIndexes.get(service) : new ConcurrentHashSet<>();
     }
-    
+
     public Collection<Service> getSubscribedService() {
         return subscriberIndexes.keySet();
     }
-    
+
     /**
      * Clear the service index without instances.
      *
@@ -75,7 +83,7 @@ public class ClientServiceIndexesManager extends SmartSubscriber {
             publisherIndexes.remove(service);
         }
     }
-    
+
     @Override
     public List<Class<? extends Event>> subscribeTypes() {
         List<Class<? extends Event>> result = new LinkedList<>();
@@ -86,25 +94,37 @@ public class ClientServiceIndexesManager extends SmartSubscriber {
         result.add(ClientOperationEvent.ClientReleaseEvent.class);
         return result;
     }
-    
+
     @Override
     public void onEvent(Event event) {
         if (event instanceof ClientOperationEvent.ClientReleaseEvent) {
+            // 处理客户端断开连接事件
             handleClientDisconnect((ClientOperationEvent.ClientReleaseEvent) event);
         } else if (event instanceof ClientOperationEvent) {
+            // 处理排除ClientReleaseEvent后的其它客户端操作事件
+            // TODO 进入
             handleClientOperation((ClientOperationEvent) event);
         }
     }
-    
+
+    /**
+     * 1、从订阅者列表中移除所有服务对这个客户端的引用
+     * 2、从发布者列表中移除所有服务对这个客户端的引用
+     * @param event
+     */
     private void handleClientDisconnect(ClientOperationEvent.ClientReleaseEvent event) {
         Client client = event.getClient();
         for (Service each : client.getAllSubscribeService()) {
+            // 从订阅者列表中移除所有服务对这个客户端的引用
+            // private final ConcurrentMap<Service, Set<String>> subscriberIndexes = new ConcurrentHashMap<>();
+            // key: Service      value: 客户端ID集合
             removeSubscriberIndexes(each, client.getClientId());
         }
         DeregisterInstanceReason reason = event.isNative()
                 ? DeregisterInstanceReason.NATIVE_DISCONNECTED : DeregisterInstanceReason.SYNCED_DISCONNECTED;
         long currentTimeMillis = System.currentTimeMillis();
         for (Service each : client.getAllPublishedService()) {
+            // 从发布者列表中移除所有服务对这个客户端的引用
             removePublisherIndexes(each, client.getClientId());
             InstancePublishInfo instance = client.getInstancePublishInfo(each);
             NotifyCenter.publishEvent(new DeregisterInstanceTraceEvent(currentTimeMillis,
@@ -112,34 +132,45 @@ public class ClientServiceIndexesManager extends SmartSubscriber {
                     instance.getIp(), instance.getPort()));
         }
     }
-    
+
     private void handleClientOperation(ClientOperationEvent event) {
+        // 获取服务
         Service service = event.getService();
+        // 获取客户端ID
         String clientId = event.getClientId();
         if (event instanceof ClientOperationEvent.ClientRegisterServiceEvent) {
+            // 处理ClientRegisterServiceEvent事件（服务注册)
+            //TODO 进入
             addPublisherIndexes(service, clientId);
         } else if (event instanceof ClientOperationEvent.ClientDeregisterServiceEvent) {
+            // 处理ClientDeregisterServiceEvent事件（服务下线）
             removePublisherIndexes(service, clientId);
         } else if (event instanceof ClientOperationEvent.ClientSubscribeServiceEvent) {
+            // 处理ClientSubscribeServiceEvent事件（订阅）
             addSubscriberIndexes(service, clientId);
         } else if (event instanceof ClientOperationEvent.ClientUnsubscribeServiceEvent) {
+            // 处理ClientUnsubscribeServiceEvent事件（取消订阅）
             removeSubscriberIndexes(service, clientId);
         }
     }
-    
+
     private void addPublisherIndexes(Service service, String clientId) {
+        // 将客户端添加到注册服务中
+        // ConcurrentMap<Service, Set<String>> publisherIndexes
         publisherIndexes.computeIfAbsent(service, key -> new ConcurrentHashSet<>()).add(clientId);
+        // 发布服务变更事件，这样其它客户端才能及时知道service这个服务可用了
         NotifyCenter.publishEvent(new ServiceEvent.ServiceChangedEvent(service, true));
     }
-    
+
     private void removePublisherIndexes(Service service, String clientId) {
         publisherIndexes.computeIfPresent(service, (s, ids) -> {
             ids.remove(clientId);
+            // 发布服务变更事件，这样其它客户端才能及时知道service这个服务不可用了
             NotifyCenter.publishEvent(new ServiceEvent.ServiceChangedEvent(service, true));
             return ids.isEmpty() ? null : ids;
         });
     }
-    
+
     private void addSubscriberIndexes(Service service, String clientId) {
         Set<String> clientIds = subscriberIndexes.computeIfAbsent(service, key -> new ConcurrentHashSet<>());
         // Fix #5404, Only first time add need notify event.
@@ -147,7 +178,7 @@ public class ClientServiceIndexesManager extends SmartSubscriber {
             NotifyCenter.publishEvent(new ServiceEvent.ServiceSubscribedEvent(service, clientId));
         }
     }
-    
+
     private void removeSubscriberIndexes(Service service, String clientId) {
         Set<String> clientIds = subscriberIndexes.get(service);
         if (clientIds == null) {

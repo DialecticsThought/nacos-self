@@ -33,7 +33,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
  */
 @ControllerAdvice
 public class ResponseExceptionHandler {
-    
+
     /**
      * Handle {@link NacosException}.
      *
@@ -47,7 +47,7 @@ public class ResponseExceptionHandler {
     }
 
     /**
-     * Handle {@link com.alibaba.nacos.api.exception.runtime.NacosRuntimeException}.
+     * Handle {@link NacosRuntimeException}.
      *
      * @param e NacosException
      * @return ResponseEntity
@@ -57,7 +57,7 @@ public class ResponseExceptionHandler {
         Loggers.SRV_LOG.error("got exception. {}", e.getMessage(), ExceptionUtil.getAllExceptionMsg(e));
         return ResponseEntity.status(e.getErrCode()).body(e.getMessage());
     }
-    
+
     /**
      * Handle {@link IllegalArgumentException}.
      *
@@ -69,7 +69,7 @@ public class ResponseExceptionHandler {
         Loggers.SRV_LOG.error("got exception. {}", ex.getMessage(), ExceptionUtil.getAllExceptionMsg(ex));
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
     }
-    
+
     /**
      * Handle missing request parameter exception.
      *
@@ -82,7 +82,7 @@ public class ResponseExceptionHandler {
         String name = ex.getParameterName();
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Parameter '" + name + "' is missing");
     }
-    
+
     /**
      * Handle other exception.
      *

@@ -26,27 +26,33 @@ import com.alibaba.nacos.sys.env.EnvUtil;
  * @author xiweng.yy
  */
 public class NamingExecuteTaskDispatcher {
-    
+
     private static final NamingExecuteTaskDispatcher INSTANCE = new NamingExecuteTaskDispatcher();
-    
+    // NacosExecuteTaskExecuteEngine跟NacosDelayTaskExecuteEngine很类似，
+    // 都是继承于AbstractNacosTaskExecuteEngine，只不过NacosDelayTaskExecuteEngine是带有延时功能
+    // 立即执行的任务引擎
+    // TODO 进入该类
     private final NacosExecuteTaskExecuteEngine executeEngine;
-    
+
     private NamingExecuteTaskDispatcher() {
+        // 初始化任务执行引擎：NacosExecuteTaskExecuteEngine
         executeEngine = new NacosExecuteTaskExecuteEngine(EnvUtil.FUNCTION_MODE_NAMING, Loggers.SRV_LOG);
     }
-    
+
     public static NamingExecuteTaskDispatcher getInstance() {
         return INSTANCE;
     }
-    
+
     public void dispatchAndExecuteTask(Object dispatchTag, AbstractExecuteTask task) {
+        // 往任务引擎添加任务
+        // TODO 进入
         executeEngine.addTask(dispatchTag, task);
     }
-    
+
     public String workersStatus() {
         return executeEngine.workersStatus();
     }
-    
+
     public void destroy() throws Exception {
         executeEngine.shutdown();
     }

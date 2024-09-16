@@ -40,19 +40,19 @@ import java.util.concurrent.TimeUnit;
  * @author shiyiyue
  */
 public class NacosTpsControlManager extends TpsControlManager {
-    
+
     /**
      * point name -> tps barrier.
      */
     protected final Map<String, TpsBarrier> points = new ConcurrentHashMap<>(16);
-    
+
     /**
      * point name -> tps control rule.
      */
     protected final Map<String, TpsControlRule> rules = new ConcurrentHashMap<>(16);
-    
+
     protected ScheduledExecutorService executorService;
-    
+
     public NacosTpsControlManager() {
         super();
         executorService = ExecutorFactory.newSingleScheduledExecutorService(r -> {
@@ -62,12 +62,12 @@ public class NacosTpsControlManager extends TpsControlManager {
         });
         startTpsReport();
     }
-    
+
     protected void startTpsReport() {
         executorService
-                .scheduleWithFixedDelay(new NacosTpsControlManager.TpsMetricsReporter(), 0, 900, TimeUnit.MILLISECONDS);
+                .scheduleWithFixedDelay(new TpsMetricsReporter(), 0, 900, TimeUnit.MILLISECONDS);
     }
-    
+
     /**
      * apple tps rule.
      *
@@ -83,7 +83,7 @@ public class NacosTpsControlManager extends TpsControlManager {
             }
         }
     }
-    
+
     /**
      * apple tps rule.
      *
@@ -100,15 +100,15 @@ public class NacosTpsControlManager extends TpsControlManager {
             points.get(pointName).applyRule(rule);
         }
     }
-    
+
     public Map<String, TpsBarrier> getPoints() {
         return points;
     }
-    
+
     public Map<String, TpsControlRule> getRules() {
         return rules;
     }
-    
+
     /**
      * check tps result.
      *
@@ -116,7 +116,7 @@ public class NacosTpsControlManager extends TpsControlManager {
      * @return check current tps is allowed.
      */
     public TpsCheckResponse check(TpsCheckRequest tpsRequest) {
-        
+
         if (points.containsKey(tpsRequest.getPointName())) {
             try {
                 return points.get(tpsRequest.getPointName()).applyTps(tpsRequest);
@@ -125,13 +125,13 @@ public class NacosTpsControlManager extends TpsControlManager {
             }
         }
         return new TpsCheckResponse(true, TpsResultCode.CHECK_SKIP, "skip");
-        
+
     }
-    
+
     class TpsMetricsReporter implements Runnable {
-        
+
         long lastReportSecond = 0L;
-        
+
         /**
          * get format string "2021-01-16 17:20:21" of timestamp.
          *
@@ -142,16 +142,16 @@ public class NacosTpsControlManager extends TpsControlManager {
             String format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date(timeStamp));
             return format;
         }
-        
+
         @Override
         public void run() {
             try {
                 long now = System.currentTimeMillis();
                 StringBuilder stringBuilder = new StringBuilder();
                 Set<Map.Entry<String, TpsBarrier>> entries = points.entrySet();
-                
+
                 long tempSecond = 0L;
-                
+
                 long metricsTime = now - 1000L;
                 String formatString = getTimeFormatOfSecond(metricsTime);
                 for (Map.Entry<String, TpsBarrier> entry : entries) {
@@ -164,28 +164,28 @@ public class NacosTpsControlManager extends TpsControlManager {
                             continue;
                         }
                         tempSecond = metrics.getTimeStamp();
-                        
+
                         stringBuilder.append(pointName).append("|").append("point").append("|")
                                 .append(metrics.getPeriod()).append("|").append(formatString).append("|")
                                 .append(metrics.getCounter().getPassCount()).append("|")
                                 .append(metrics.getCounter().getDeniedCount()).append("|").append("\n");
                     }
                 }
-                
+
                 if (tempSecond > 0) {
                     lastReportSecond = tempSecond;
                 }
-                
+
                 if (stringBuilder.length() > 0) {
                     Loggers.TPS.info("Tps reporting...\n" + stringBuilder.toString());
                 }
             } catch (Throwable throwable) {
                 Loggers.TPS.error("Tps reporting error", throwable);
             }
-            
+
         }
     }
-    
+
     @Override
     public String getName() {
         return "nacos";

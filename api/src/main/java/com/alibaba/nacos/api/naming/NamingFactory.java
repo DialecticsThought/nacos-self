@@ -27,9 +27,11 @@ import java.util.Properties;
  * @author nkorange
  */
 public class NamingFactory {
-    
+
     /**
      * Create a new naming service.
+     *  namingService(): 通过反射创建一个NacosNamingService对象
+     *  NamingFactory#createNamingService(java.util.Properties)
      *
      * @param serverList server list
      * @return new naming service
@@ -44,7 +46,7 @@ public class NamingFactory {
             throw new NacosException(NacosException.CLIENT_INVALID_PARAM, e);
         }
     }
-    
+
     /**
      * Create a new naming service.
      *

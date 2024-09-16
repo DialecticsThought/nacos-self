@@ -47,15 +47,18 @@ import java.util.concurrent.TimeUnit;
  */
 @Component("connectionBasedClientManager")
 public class ConnectionBasedClientManager extends ClientConnectionEventListener implements ClientManager {
-    
+
     private final ConcurrentMap<String, ConnectionBasedClient> clients = new ConcurrentHashMap<>();
-    
+
     public ConnectionBasedClientManager() {
+        // 启动了一个定时任务，无延迟，每隔5s执行一次
+        // 具体就是执行ExpiredClientCleaner.run()方法
+        //TODO 查看 ExpiredClientCleaner 是一个Runnable
         GlobalExecutor
                 .scheduleExpiredClientCleaner(new ExpiredClientCleaner(this), 0, Constants.DEFAULT_HEART_BEAT_INTERVAL,
                         TimeUnit.MILLISECONDS);
     }
-    
+
     @Override
     public void clientConnected(Connection connect) {
         if (!RemoteConstants.LABEL_MODULE_NAMING.equals(connect.getMetaInfo().getLabel(RemoteConstants.LABEL_MODULE))) {
@@ -66,14 +69,14 @@ public class ConnectionBasedClientManager extends ClientConnectionEventListener 
         attributes.addClientAttribute(ClientConstants.CONNECTION_METADATA, connect.getMetaInfo());
         clientConnected(connect.getMetaInfo().getConnectionId(), attributes);
     }
-    
+
     @Override
     public boolean clientConnected(String clientId, ClientAttributes attributes) {
         String type = attributes.getClientAttribute(ClientConstants.CONNECTION_TYPE);
         ClientFactory clientFactory = ClientFactoryHolder.getInstance().findClientFactory(type);
         return clientConnected(clientFactory.newClient(clientId, attributes));
     }
-    
+
     @Override
     public boolean clientConnected(final Client client) {
         clients.computeIfAbsent(client.getClientId(), s -> {
@@ -82,19 +85,19 @@ public class ConnectionBasedClientManager extends ClientConnectionEventListener 
         });
         return true;
     }
-    
+
     @Override
     public boolean syncClientConnected(String clientId, ClientAttributes attributes) {
         String type = attributes.getClientAttribute(ClientConstants.CONNECTION_TYPE);
         ClientFactory clientFactory = ClientFactoryHolder.getInstance().findClientFactory(type);
         return clientConnected(clientFactory.newSyncedClient(clientId, attributes));
     }
-    
+
     @Override
     public void clientDisConnected(Connection connect) {
         clientDisconnected(connect.getMetaInfo().getConnectionId());
     }
-    
+
     @Override
     public boolean clientDisconnected(String clientId) {
         Loggers.SRV_LOG.info("Client connection {} disconnect, remove instances and subscribers", clientId);
@@ -104,31 +107,44 @@ public class ConnectionBasedClientManager extends ClientConnectionEventListener 
         }
         client.release();
         boolean isResponsible = isResponsibleClient(client);
+        // 发布客户端释放连接事件
+        /**
+         * 具体处理是在：{@link com.alibaba.nacos.naming.core.v2.index.ClientServiceIndexesManager.onEvent}
+         * 主要做了下面几个事情：
+         * 1、从订阅者列表中移除所有服务对这个客户端的引用
+         * 2、从发布者列表中移除所有服务对这个客户端的引用
+         */
         NotifyCenter.publishEvent(new ClientOperationEvent.ClientReleaseEvent(client, isResponsible));
+        // 发布客户端断开连接事件
+        /**
+         * 具体处理是在：{@link com.alibaba.nacos.naming.core.v2.metadata.NamingMetadataManager.onEvent}
+         * 主要做了下面几个事情：
+         * 1、将服务实例元数据添加到过期集合中
+         */
         NotifyCenter.publishEvent(new ClientEvent.ClientDisconnectEvent(client, isResponsible));
         return true;
     }
-    
+
     @Override
     public Client getClient(String clientId) {
         return clients.get(clientId);
     }
-    
+
     @Override
     public boolean contains(String clientId) {
         return clients.containsKey(clientId);
     }
-    
+
     @Override
     public Collection<String> allClientId() {
         return clients.keySet();
     }
-    
+
     @Override
     public boolean isResponsibleClient(Client client) {
         return (client instanceof ConnectionBasedClient) && ((ConnectionBasedClient) client).isNative();
     }
-    
+
     @Override
     public boolean verifyClient(DistroClientVerifyInfo verifyData) {
         ConnectionBasedClient client = clients.get(verifyData.getClientId());
@@ -144,21 +160,23 @@ public class ConnectionBasedClientManager extends ClientConnectionEventListener 
         }
         return false;
     }
-    
+
     private static class ExpiredClientCleaner implements Runnable {
-        
+
         private final ConnectionBasedClientManager clientManager;
-        
+
         public ExpiredClientCleaner(ConnectionBasedClientManager clientManager) {
             this.clientManager = clientManager;
         }
-        
+
         @Override
         public void run() {
             long currentTime = System.currentTimeMillis();
             for (String each : clientManager.allClientId()) {
+                // 判断客户端是否超时
                 ConnectionBasedClient client = (ConnectionBasedClient) clientManager.getClient(each);
                 if (null != client && client.isExpire(currentTime)) {
+                    // 超时连接处理
                     clientManager.clientDisconnected(each);
                 }
             }

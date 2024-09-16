@@ -38,16 +38,16 @@ import static com.alibaba.nacos.api.common.Constants.NUMBER_PATTERN_STRING;
  * @since 1.0.0
  */
 public class NamingUtils {
-    
+
     private static final Pattern CLUSTER_NAME_PATTERN = Pattern.compile(CLUSTER_NAME_PATTERN_STRING);
-    
+
     private static final Pattern NUMBER_PATTERN = Pattern.compile(NUMBER_PATTERN_STRING);
-    
+
     /**
      * Returns a combined string with serviceName and groupName. serviceName can not be nil.
      *
      * <p>In most cases, serviceName can not be nil. In other cases, for search or anything, See {@link
-     * com.alibaba.nacos.api.naming.utils.NamingUtils#getGroupedNameOptional(String, String)}
+     * NamingUtils#getGroupedNameOptional(String, String)}
      *
      * <p>etc:
      * <p>serviceName | groupName | result</p>
@@ -66,7 +66,7 @@ public class NamingUtils {
         final String resultGroupedName = groupName + Constants.SERVICE_INFO_SPLITER + serviceName;
         return resultGroupedName.intern();
     }
-    
+
     public static String getServiceName(final String serviceNameWithGroup) {
         if (StringUtils.isBlank(serviceNameWithGroup)) {
             return StringUtils.EMPTY;
@@ -76,7 +76,7 @@ public class NamingUtils {
         }
         return serviceNameWithGroup.split(Constants.SERVICE_INFO_SPLITER)[1];
     }
-    
+
     public static String getGroupName(final String serviceNameWithGroup) {
         if (StringUtils.isBlank(serviceNameWithGroup)) {
             return StringUtils.EMPTY;
@@ -86,7 +86,7 @@ public class NamingUtils {
         }
         return serviceNameWithGroup.split(Constants.SERVICE_INFO_SPLITER)[0];
     }
-    
+
     /**
      * Check serviceName is compatibility mode or not.
      *
@@ -96,7 +96,7 @@ public class NamingUtils {
     public static boolean isServiceNameCompatibilityMode(final String serviceName) {
         return !StringUtils.isBlank(serviceName) && serviceName.contains(Constants.SERVICE_INFO_SPLITER);
     }
-    
+
     /**
      * check combineServiceName format. the serviceName can't be blank.
      * <pre>
@@ -118,10 +118,10 @@ public class NamingUtils {
             throw new IllegalArgumentException("Param 'serviceName' is illegal, groupName can't be empty");
         }
     }
-    
+
     /**
      * Returns a combined string with serviceName and groupName. Such as 'groupName@@serviceName'
-     * <p>This method works similar with {@link com.alibaba.nacos.api.naming.utils.NamingUtils#getGroupedName} But not
+     * <p>This method works similar with {@link NamingUtils#getGroupedName} But not
      * verify any parameters.
      *
      * </p> etc:
@@ -135,7 +135,7 @@ public class NamingUtils {
     public static String getGroupedNameOptional(final String serviceName, final String groupName) {
         return groupName + Constants.SERVICE_INFO_SPLITER + serviceName;
     }
-    
+
     /**
      * <p>Check instance param about keep alive.</p>
      *
@@ -163,7 +163,7 @@ public class NamingUtils {
                             instance.getClusterName()));
         }
     }
-    
+
     /**
      * check batch register is Ephemeral.
      * @param instance instance
@@ -175,7 +175,7 @@ public class NamingUtils {
                     String.format("Batch registration does not allow persistent instance registration , Instance：%s", instance));
         }
     }
-    
+
     /**
      * Batch verify the validity of instances.
      * @param instances List of instances to be registered
@@ -188,7 +188,7 @@ public class NamingUtils {
             checkInstanceIsLegal(instance);
         }
     }
-    
+
     /**
      * Check string is a number or not.
      *

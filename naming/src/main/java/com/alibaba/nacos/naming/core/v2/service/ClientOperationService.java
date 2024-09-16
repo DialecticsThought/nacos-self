@@ -34,7 +34,7 @@ import java.util.Map;
  * @author xiweng.yy
  */
 public interface ClientOperationService {
-    
+
     /**
      * Register instance to service.
      *
@@ -44,7 +44,7 @@ public interface ClientOperationService {
      * @throws NacosException throws NacosException
      */
     void registerInstance(Service service, Instance instance, String clientId) throws NacosException;
-    
+
     /**
      * Batch register instance to service.
      *
@@ -53,7 +53,7 @@ public interface ClientOperationService {
      * @param clientId id of client
      */
     void batchRegisterInstance(Service service, List<Instance> instances, String clientId);
-    
+
     /**
      * Deregister instance from service.
      *
@@ -62,7 +62,7 @@ public interface ClientOperationService {
      * @param clientId id of client
      */
     void deregisterInstance(Service service, Instance instance, String clientId);
-    
+
     /**
      * Subscribe a service.
      *
@@ -71,9 +71,9 @@ public interface ClientOperationService {
      * @param clientId   id of client
      */
     default void subscribeService(Service service, Subscriber subscriber, String clientId) {
-    
+
     }
-    
+
     /**
      * Unsubscribe a service.
      *
@@ -82,12 +82,12 @@ public interface ClientOperationService {
      * @param clientId   id of client
      */
     default void unsubscribeService(Service service, Subscriber subscriber, String clientId) {
-    
+
     }
-    
+
     /**
      * get publish info.
-     *
+     * 将Instance实例信息封装成发布信息实体InstancePublishInfo。
      * @param instance {@link Instance}
      * @return {@link InstancePublishInfo}
      */
