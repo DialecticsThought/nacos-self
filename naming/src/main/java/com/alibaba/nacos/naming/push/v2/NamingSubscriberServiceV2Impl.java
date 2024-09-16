@@ -63,8 +63,22 @@ public class NamingSubscriberServiceV2Impl extends SmartSubscriber implements Na
             NamingMetadataManager metadataManager, PushExecutorDelegate pushExecutor, SwitchDomain switchDomain) {
         this.clientManager = clientManager;
         this.indexesManager = indexesManager;
+        // 初始化任务引擎
+        // TODO 查看 NacosTaskExecuteEngine
+        // TODO 查看 AbstractNacosTaskExecuteEngine
+        // TODO 查看 NacosDelayTaskExecuteEngine
+        // TODO 查看 PushDelayTaskExecuteEngine
+        /**
+         * <pre>
+         * TODO
+         *   1、往PushDelayTaskExecuteEngine引擎中添加任务；
+         *   2、NacosDelayTaskExecuteEngine的构造方法中启动了定时执行的线程池任务，每隔100毫秒执行一次，首次执行会延迟100毫秒；
+         *   3、定时任务执行的方法是NacosDelayTaskExecuteEngine.ProcessRunnable#run()方法，其内部调用了processTasks()方法
+         * </pre>
+         */
         this.delayTaskEngine = new PushDelayTaskExecuteEngine(clientManager, indexesManager, serviceStorage,
                 metadataManager, pushExecutor, switchDomain);
+        // 往NotifyCenter中注册自己
         NotifyCenter.registerSubscriber(this, NamingEventPublisherFactory.getInstance());
 
     }
@@ -123,6 +137,7 @@ public class NamingSubscriberServiceV2Impl extends SmartSubscriber implements Na
             ServiceEvent.ServiceChangedEvent serviceChangedEvent = (ServiceEvent.ServiceChangedEvent) event;
             // 获取Service服务信息
             Service service = serviceChangedEvent.getService();
+            // TODO 查看当前类的构造器
             // 将service信息包装成一个PushDelayTask，添加到延时任务调度引擎，最终实际会执行PushDelayTaskProcessor.process()方法
             delayTaskEngine.addTask(service, new PushDelayTask(service, PushConfig.getInstance().getPushTaskDelay()));
             MetricsMonitor.incrementServiceChangeCount(service);

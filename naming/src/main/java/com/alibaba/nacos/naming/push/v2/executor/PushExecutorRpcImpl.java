@@ -33,28 +33,33 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class PushExecutorRpcImpl implements PushExecutor {
-    
+
     private final RpcPushService pushService;
-    
+
     public PushExecutorRpcImpl(RpcPushService pushService) {
         this.pushService = pushService;
     }
-    
+
     @Override
     public void doPush(String clientId, Subscriber subscriber, PushDataWrapper data) {
         pushService.pushWithoutAck(clientId,
                 NotifySubscriberRequest.buildNotifySubscriberRequest(getServiceInfo(data, subscriber)));
     }
-    
+
     @Override
     public void doPushWithCallback(String clientId, Subscriber subscriber, PushDataWrapper data,
             NamingPushCallback callBack) {
+        // 获取服务信息
         ServiceInfo actualServiceInfo = getServiceInfo(data, subscriber);
         callBack.setActualServiceInfo(actualServiceInfo);
+        // 构建一个NotifySubscriberRequest，通过grpc向客户端发送信息
+        // TODO 查看 pushWithCallback 本质是发送request
+        // 并且 这个 request的handler是 com.alibaba.nacos.client.naming.remote.gprc.NamingPushRequestHandler
+        // TODO 查看 NamingPushRequestHandler#requestReply
         pushService.pushWithCallback(clientId, NotifySubscriberRequest.buildNotifySubscriberRequest(actualServiceInfo),
                 callBack, GlobalExecutor.getCallbackExecutor());
     }
-    
+
     private ServiceInfo getServiceInfo(PushDataWrapper data, Subscriber subscriber) {
         return ServiceUtil
                 .selectInstancesWithHealthyProtection(data.getOriginalData(), data.getServiceMetadata(), false, true,

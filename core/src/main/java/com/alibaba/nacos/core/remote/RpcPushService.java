@@ -36,10 +36,10 @@ import java.util.concurrent.Executor;
  */
 @Service
 public class RpcPushService {
-    
+
     @Autowired
     private ConnectionManager connectionManager;
-    
+
     /**
      * push response with no ack.
      *
@@ -49,16 +49,18 @@ public class RpcPushService {
      */
     public void pushWithCallback(String connectionId, ServerRequest request, PushCallBack requestCallBack,
             Executor executor) {
+        // 拿到客户端的连接
         Connection connection = connectionManager.getConnection(connectionId);
         if (connection != null) {
             try {
+                // 发送异步请求
                 connection.asyncRequest(request, new AbstractRequestCallBack(requestCallBack.getTimeout()) {
-                    
+
                     @Override
                     public Executor getExecutor() {
                         return executor;
                     }
-                    
+
                     @Override
                     public void onResponse(Response response) {
                         if (response.isSuccess()) {
@@ -67,7 +69,7 @@ public class RpcPushService {
                             requestCallBack.onFail(new NacosException(response.getErrorCode(), response.getMessage()));
                         }
                     }
-                    
+
                     @Override
                     public void onException(Throwable e) {
                         requestCallBack.onFail(e);
@@ -86,7 +88,7 @@ public class RpcPushService {
             requestCallBack.onSuccess();
         }
     }
-    
+
     /**
      * push response with no ack.
      *
@@ -107,5 +109,5 @@ public class RpcPushService {
             }
         }
     }
-    
+
 }
