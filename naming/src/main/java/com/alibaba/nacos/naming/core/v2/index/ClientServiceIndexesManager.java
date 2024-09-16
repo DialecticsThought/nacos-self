@@ -147,6 +147,7 @@ public class ClientServiceIndexesManager extends SmartSubscriber {
             removePublisherIndexes(service, clientId);
         } else if (event instanceof ClientOperationEvent.ClientSubscribeServiceEvent) {
             // 处理ClientSubscribeServiceEvent事件（订阅）
+            // TODO com.alibaba.nacos.naming.core.v2.service.impl.EphemeralClientOperationServiceImpl.subscribeService出发盖房
             addSubscriberIndexes(service, clientId);
         } else if (event instanceof ClientOperationEvent.ClientUnsubscribeServiceEvent) {
             // 处理ClientUnsubscribeServiceEvent事件（取消订阅）

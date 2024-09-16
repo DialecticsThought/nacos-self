@@ -357,6 +357,8 @@ public class NacosNamingService implements NamingService {
             serviceInfo = serviceInfoHolder.getServiceInfo(serviceName, groupName, clusterString);
             // 2.缓存为空，执行订阅服
             if (null == serviceInfo || !clientProxy.isSubscribed(serviceName, groupName, clusterString)) {
+                // TODO  clientProxy是 NamingClientProxyDelegate 查看该类的初始化方法
+                // TODO 查看 NamingClientProxyDelegate#subscribe
                 serviceInfo = clientProxy.subscribe(serviceName, groupName, clusterString);
             }
         } else {

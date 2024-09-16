@@ -48,20 +48,20 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class SubscribeServiceRequestHandler extends RequestHandler<SubscribeServiceRequest, SubscribeServiceResponse> {
-    
+
     private final ServiceStorage serviceStorage;
-    
+
     private final NamingMetadataManager metadataManager;
-    
+
     private final EphemeralClientOperationServiceImpl clientOperationService;
-    
+
     public SubscribeServiceRequestHandler(ServiceStorage serviceStorage, NamingMetadataManager metadataManager,
             EphemeralClientOperationServiceImpl clientOperationService) {
         this.serviceStorage = serviceStorage;
         this.metadataManager = metadataManager;
         this.clientOperationService = clientOperationService;
     }
-    
+
     @Override
     @TpsControl(pointName = "RemoteNamingServiceSubscribeUnSubscribe", name = "RemoteNamingServiceSubscribeUnsubscribe")
     @Secured(action = ActionTypes.READ)
@@ -72,17 +72,26 @@ public class SubscribeServiceRequestHandler extends RequestHandler<SubscribeServ
         String groupName = request.getGroupName();
         String app = request.getHeader("app", "unknown");
         String groupedServiceName = NamingUtils.getGroupedName(serviceName, groupName);
+        // 构建一个Service服务，指定为临时实例
         Service service = Service.newService(namespaceId, groupName, serviceName, true);
+        // 构建Subscriber订阅者对象
         Subscriber subscriber = new Subscriber(meta.getClientIp(), meta.getClientVersion(), app, meta.getClientIp(),
                 namespaceId, groupedServiceName, 0, request.getClusters());
+        // serviceStorage.getData(service): 从缓存中获取serviceInfo
+        // metadataManager.getServiceMetadata(service).orElse(null): 从内存(map)获取ServiceMetadata
+        // ServiceUtil.selectInstancesWithHealthyProtection(): 仅包含有保护机制的健康实例
         ServiceInfo serviceInfo = ServiceUtil.selectInstancesWithHealthyProtection(serviceStorage.getData(service),
                 metadataManager.getServiceMetadata(service).orElse(null), subscriber.getCluster(), false,
                 true, subscriber.getIp());
         if (request.isSubscribe()) {
+            // 订阅服务
+            // TODO 查看 重点
+            // TODO 本质：将service添加到订阅者列表中，然后发布客户端订阅事件
             clientOperationService.subscribeService(service, subscriber, meta.getConnectionId());
             NotifyCenter.publishEvent(new SubscribeServiceTraceEvent(System.currentTimeMillis(),
                     meta.getClientIp(), service.getNamespace(), service.getGroup(), service.getName()));
         } else {
+            // 取消订阅服务
             clientOperationService.unsubscribeService(service, subscriber, meta.getConnectionId());
             NotifyCenter.publishEvent(new UnsubscribeServiceTraceEvent(System.currentTimeMillis(),
                     meta.getClientIp(), service.getNamespace(), service.getGroup(), service.getName()));

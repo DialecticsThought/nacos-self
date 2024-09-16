@@ -229,6 +229,7 @@ public class NamingGrpcRedoService implements ConnectionEventListener {
     public void cacheSubscriberForRedo(String serviceName, String groupName, String cluster) {
         String key = ServiceInfo.getKey(NamingUtils.getGroupedName(serviceName, groupName), cluster);
         SubscriberRedoData redoData = SubscriberRedoData.build(serviceName, groupName, cluster);
+        // private final ConcurrentMap<String, SubscriberRedoData> subscribes = new ConcurrentHashMap<>()
         synchronized (subscribes) {
             subscribes.put(key, redoData);
         }

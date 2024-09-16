@@ -164,13 +164,23 @@ public class NamingClientProxyDelegate implements NamingClientProxy {
     @Override
     public ServiceInfo subscribe(String serviceName, String groupName, String clusters) throws NacosException {
         NAMING_LOGGER.info("[SUBSCRIBE-SERVICE] service:{}, group:{}, clusters:{} ", serviceName, groupName, clusters);
+        // 服务名称（带组名）  格式：groupName@@serviceName
         String serviceNameWithGroup = NamingUtils.getGroupedName(serviceName, groupName);
+        // 如果集群名称非空，key还需要拼接上集群名称
         String serviceKey = ServiceInfo.getKey(serviceNameWithGroup, clusters);
+        // 调度更新，往线程池中提交一个UpdateTask任务
+        // TODO 进入
         serviceInfoUpdateService.scheduleUpdateIfAbsent(serviceName, groupName, clusters);
+        // 获取缓存中的服务信息
         ServiceInfo result = serviceInfoHolder.getServiceInfoMap().get(serviceKey);
         if (null == result || !isSubscribed(serviceName, groupName, clusters)) {
+            // 缓存中不存在对应的服务信息 或者 SubscriberRedoData还未注册，则执行订阅
+            // TODO 查看
             result = grpcClientProxy.subscribe(serviceName, groupName, clusters);
         }
+
+        // 处理服务信息：获取老的服务信息，将新的服务信息重新存入客户端缓存中，对比新的服务信息，
+        // 如发生变更，则发布实例变更数据，并同步serviceInfo数据到本地文件
         serviceInfoHolder.processServiceInfo(result);
         return result;
     }
