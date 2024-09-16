@@ -74,7 +74,8 @@ public class EphemeralClientOperationServiceImpl implements ClientOperationServi
         // 1、client是否为空，为空代表客户端已经断开连接，非法
         // 2、client是否为临时的，如果非临时的连接，非法，直接返回
         checkClientIsLegal(client, clientId);
-        // 获取实例发布信息，包含一些属性，如实例IP、实例ID、端口号等等
+        // 获取实例发布信息，包含一些属性，如实例IP、实例ID、
+        //TODO 可以进入看一下
         InstancePublishInfo instanceInfo = getPublishInfo(instance);
         /**
          * 负责存储当前客户端服务注册表，也就是 service和instance的关系。
@@ -84,6 +85,7 @@ public class EphemeralClientOperationServiceImpl implements ClientOperationServi
          */
         // com.alibaba.nacos.naming.core.v2.client.AbstractClient.publishers
         // protected final ConcurrentHashMap<Service, InstancePublishInfo> publishers = new ConcurrentHashMap<>(16, 0.75f, 1);
+        // TODO 进入
         client.addServiceInstance(singleton, instanceInfo);
         // 设置客户端最后更新时间为当前时间
         client.setLastUpdatedTime();
