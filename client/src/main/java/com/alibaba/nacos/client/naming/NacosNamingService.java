@@ -253,8 +253,16 @@ public class NacosNamingService implements NamingService {
         return list;
     }
 
+    /**
+     * TODO com.alibaba.cloud.nacos.discovery.NacosServiceDiscovery#getInstances调用的是这个方法
+     * @param serviceName name of service.
+     * @param healthy     a flag to indicate returning healthy or unhealthy instances
+     * @return
+     * @throws NacosException
+     */
     @Override
     public List<Instance> selectInstances(String serviceName, boolean healthy) throws NacosException {
+        //TODO 查看
         return selectInstances(serviceName, new ArrayList<>(), healthy);
     }
 
@@ -278,6 +286,7 @@ public class NacosNamingService implements NamingService {
     @Override
     public List<Instance> selectInstances(String serviceName, List<String> clusters, boolean healthy)
             throws NacosException {
+        // TODO 查看
         return selectInstances(serviceName, clusters, healthy, true);
     }
 
@@ -290,6 +299,7 @@ public class NacosNamingService implements NamingService {
     @Override
     public List<Instance> selectInstances(String serviceName, List<String> clusters, boolean healthy, boolean subscribe)
             throws NacosException {
+        // TODO 查看
         return selectInstances(serviceName, Constants.DEFAULT_GROUP, clusters, healthy, subscribe);
     }
 
@@ -297,6 +307,7 @@ public class NacosNamingService implements NamingService {
     public List<Instance> selectInstances(String serviceName, String groupName, List<String> clusters, boolean healthy,
             boolean subscribe) throws NacosException {
         ServiceInfo serviceInfo = getServiceInfo(serviceName, groupName, clusters, subscribe);
+        // TODO 查看
         return selectInstances(serviceInfo, healthy);
     }
 
@@ -324,12 +335,21 @@ public class NacosNamingService implements NamingService {
     private ServiceInfo getServiceInfoBySubscribe(String serviceName, String groupName, String clusterString,
             boolean subscribe) throws NacosException {
         ServiceInfo serviceInfo;
-        if (subscribe) {
+        if (subscribe) {  // 是否订阅，默认是订阅的
+            /**
+             * 1.从缓存中获取ServiceInfo
+             * ConcurrentMap<String, ServiceInfo> serviceInfoMap
+             * key:  groupName@@serviceName  或者  groupName@@serviceName@@clusterString
+             * value: ServiceInfo
+             */
+            // 示例：serviceName=discovery-provider   groupName=DEFAULT_GROUP
             serviceInfo = serviceInfoHolder.getServiceInfo(serviceName, groupName, clusterString);
+            // 2.缓存为空，执行订阅服
             if (null == serviceInfo || !clientProxy.isSubscribed(serviceName, groupName, clusterString)) {
                 serviceInfo = clientProxy.subscribe(serviceName, groupName, clusterString);
             }
         } else {
+            // 3.非订阅，通过grpc发送ServiceQueryRequest服务查询请求
             serviceInfo = clientProxy.queryInstancesOfService(serviceName, groupName, clusterString, false);
         }
         return serviceInfo;
@@ -338,16 +358,23 @@ public class NacosNamingService implements NamingService {
     private ServiceInfo getServiceInfo(String serviceName, String groupName, List<String> clusters, boolean subscribe)
             throws NacosException {
         ServiceInfo serviceInfo;
+        // 集群名称,使用逗号分隔
         String clusterString = StringUtils.join(clusters, ",");
-        if (serviceInfoHolder.isFailoverSwitch()) {
+        if (serviceInfoHolder.isFailoverSwitch()) {// 检查是否启用了 failover（故障转移） 机制
+            // 如果是故障切换模式，客户端会尝试从故障转移文件中读取服务信息，而不是直接从 Nacos 服务器请求
             serviceInfo = getServiceInfoByFailover(serviceName, groupName, clusterString);
+            /**
+             * 如果 getServiceInfoByFailover 成功获取到服务信息（serviceInfo 不为空，且包含 hosts），
+             * 则记录日志，并直接返回服务信息。
+             * 这样，在发生故障时，客户端依旧可以使用上一次的服务信息继续工作
+             */
             if (serviceInfo != null && serviceInfo.getHosts().size() > 0) {
                 NAMING_LOGGER.debug("getServiceInfo from failover,serviceName: {}  data:{}", serviceName,
                         JacksonUtils.toJson(serviceInfo.getHosts()));
                 return serviceInfo;
             }
         }
-
+        // TODO 查看
         serviceInfo = getServiceInfoBySubscribe(serviceName, groupName, clusterString, subscribe);
         return serviceInfo;
     }

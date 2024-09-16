@@ -64,10 +64,13 @@ public class ServiceListRequestHandler extends RequestHandler<ServiceListRequest
          * namespaceSingletonMaps.getOrDefault(namespace, new HashSet<>(1))
          */
         Collection<Service> serviceSet = ServiceManager.getInstance().getSingletons(request.getNamespace());
+        // 构建响应结果
         ServiceListResponse result = ServiceListResponse.buildSuccessResponse(0, new LinkedList<>());
         if (!serviceSet.isEmpty()) {
+            // 过滤指定分组的Service，添加groupServiceName，格式如：groupA@@serviceA
             Collection<String> serviceNameSet = selectServiceWithGroupName(serviceSet, request.getGroupName());
             // TODO select service by selector
+            // 按分页裁剪serviceNameSet
             List<String> serviceNameList = ServiceUtil
                     .pageServiceName(request.getPageNo(), request.getPageSize(), serviceNameSet);
             result.setCount(serviceNameSet.size());
