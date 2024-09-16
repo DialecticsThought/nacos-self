@@ -244,7 +244,7 @@ public class NacosNamingService implements NamingService {
 
     @Override
     public List<Instance> getAllInstances(String serviceName, String groupName, List<String> clusters,
-            boolean subscribe) throws NacosException {
+                                          boolean subscribe) throws NacosException {
         List<Instance> list;
         ServiceInfo serviceInfo = getServiceInfo(serviceName, groupName, clusters, subscribe);
         if (serviceInfo == null || CollectionUtils.isEmpty(list = serviceInfo.getHosts())) {
@@ -255,6 +255,15 @@ public class NacosNamingService implements NamingService {
 
     /**
      * TODO com.alibaba.cloud.nacos.discovery.NacosServiceDiscovery#getInstances调用的是这个方法
+     *
+     * <pre>
+     *   TODO
+     *     如果是订阅模式，则直接从本地缓存获取服务信息（ServiceInfo），然后从中获取实例列表，
+     *          这是因为订阅机制会自动同步服务器实例的变化到本地。如果本地缓存中没有，
+     *                  那说明是首次调用，则进行订阅，在订阅完成后会获得到服务信息。
+     *    如果是非订阅模式，那就直接请求服务器端，获得服务信息
+     * </pre>
+     *
      * @param serviceName name of service.
      * @param healthy     a flag to indicate returning healthy or unhealthy instances
      * @return
@@ -305,9 +314,10 @@ public class NacosNamingService implements NamingService {
 
     @Override
     public List<Instance> selectInstances(String serviceName, String groupName, List<String> clusters, boolean healthy,
-            boolean subscribe) throws NacosException {
+                                          boolean subscribe) throws NacosException {
         ServiceInfo serviceInfo = getServiceInfo(serviceName, groupName, clusters, subscribe);
         // TODO 查看
+        // 筛选满足条件的实例
         return selectInstances(serviceInfo, healthy);
     }
 
@@ -320,11 +330,12 @@ public class NacosNamingService implements NamingService {
         Iterator<Instance> iterator = list.iterator();
         while (iterator.hasNext()) {
             Instance instance = iterator.next();
+            // 判断 实例是否健康 || 可用 || 权重 <= 0
             if (healthy != instance.isHealthy() || !instance.isEnabled() || instance.getWeight() <= 0) {
                 iterator.remove();
             }
         }
-
+        // 返回最终实例
         return list;
     }
 
@@ -333,7 +344,7 @@ public class NacosNamingService implements NamingService {
     }
 
     private ServiceInfo getServiceInfoBySubscribe(String serviceName, String groupName, String clusterString,
-            boolean subscribe) throws NacosException {
+                                                  boolean subscribe) throws NacosException {
         ServiceInfo serviceInfo;
         if (subscribe) {  // 是否订阅，默认是订阅的
             /**
@@ -419,7 +430,7 @@ public class NacosNamingService implements NamingService {
 
     @Override
     public Instance selectOneHealthyInstance(String serviceName, String groupName, List<String> clusters,
-            boolean subscribe) throws NacosException {
+                                             boolean subscribe) throws NacosException {
         ServiceInfo serviceInfo = getServiceInfo(serviceName, groupName, clusters, subscribe);
         return Balancer.RandomByWeight.selectHost(serviceInfo);
     }
@@ -493,6 +504,7 @@ public class NacosNamingService implements NamingService {
 
     /**
      * TODO 查看
+     *
      * @param pageNo    page index
      * @param pageSize  page size
      * @param groupName group name
@@ -537,7 +549,7 @@ public class NacosNamingService implements NamingService {
             String groupNameOfInstance = NamingUtils.getGroupName(serviceName);
             if (!groupName.equals(groupNameOfInstance)) {
                 throw new NacosException(NacosException.CLIENT_INVALID_PARAM, String.format(
-                    "wrong group name prefix of instance service name! it should be: %s, Instance: %s", groupName, instance));
+                        "wrong group name prefix of instance service name! it should be: %s, Instance: %s", groupName, instance));
             }
             instance.setServiceName(NamingUtils.getServiceName(serviceName));
         }
