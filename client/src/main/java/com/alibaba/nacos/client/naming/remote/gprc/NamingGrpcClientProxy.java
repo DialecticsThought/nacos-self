@@ -372,13 +372,17 @@ public class NamingGrpcClientProxy extends AbstractNamingClientProxy {
     @Override
     public ListView<String> getServiceList(int pageNo, int pageSize, String groupName, AbstractSelector selector)
             throws NacosException {
+        // 构建ServiceListRequest请求（服务列表请求），指定命名空间ID、服务组名
         ServiceListRequest request = new ServiceListRequest(namespaceId, groupName, pageNo, pageSize);
         if (selector != null) {
             if (SelectorType.valueOf(selector.getType()) == SelectorType.label) {
                 request.setSelector(JacksonUtils.toJson(selector));
             }
         }
+        // 发送服务列表请求给Nacos服务端，接下来由服务端处理
+        // TODO 查看com.alibaba.nacos.naming.remote.rpc.handler.ServiceListRequestHandler#handle
         ServiceListResponse response = requestToServer(request, ServiceListResponse.class);
+        // 组装返回值出去
         ListView<String> result = new ListView<>();
         result.setCount(response.getCount());
         result.setData(response.getServiceNames());
