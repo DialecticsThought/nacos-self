@@ -25,26 +25,27 @@ import java.util.concurrent.Executor;
  */
 @SuppressWarnings("PMD.AbstractClassShouldStartWithAbstractNamingRule")
 public abstract class AbstractSharedListener implements Listener {
-    
+
     private volatile String dataId;
-    
+
     private volatile String group;
-    
+
     public final void fillContext(String dataId, String group) {
         this.dataId = dataId;
         this.group = group;
     }
-    
+
     @Override
     public final void receiveConfigInfo(String configInfo) {
+        // TODO 进入
         innerReceive(dataId, group, configInfo);
     }
-    
+
     @Override
     public Executor getExecutor() {
         return null;
     }
-    
+
     /**
      * receive.
      *

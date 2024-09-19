@@ -52,17 +52,17 @@ import java.util.concurrent.atomic.AtomicLong;
  * @author Nacos
  */
 public class CacheData {
-    
+
     private static final Logger LOGGER = LogUtils.logger(CacheData.class);
-    
+
     private static final long DEFAULT_NOTIF_WARN_TIMEOUTS = 60000;
-    
+
     private static long notifyWarnTimeout = DEFAULT_NOTIF_WARN_TIMEOUTS;
-    
+
     static {
         initNotifyWarnTimeout();
     }
-    
+
     static long initNotifyWarnTimeout() {
         String notifyTimeouts = System.getProperty("nacos.listener.notify.warn.timeout");
         if (StringUtils.isNotBlank(notifyTimeouts) && NumberUtils.isDigits(notifyTimeouts)) {
@@ -75,9 +75,9 @@ public class CacheData {
         }
         return notifyWarnTimeout;
     }
-    
+
     static ScheduledThreadPoolExecutor scheduledExecutor;
-    
+
     static ScheduledThreadPoolExecutor getNotifyBlockMonitor() {
         if (scheduledExecutor == null) {
             synchronized (CacheData.class) {
@@ -91,98 +91,119 @@ public class CacheData {
         }
         return scheduledExecutor;
     }
-    
+    // 是否初始化快照
     static boolean initSnapshot;
-    
+
+    // 静态块，获取属性值
     static {
         initSnapshot = NacosClientProperties.PROTOTYPE.getBoolean("nacos.cache.data.init.snapshot", true);
         LOGGER.info("nacos.cache.data.init.snapshot = {} ", initSnapshot);
     }
-    
+
     public final String envName;
-    
+
     private final ConfigFilterChainManager configFilterChainManager;
-    
+
+    // dataId
     public final String dataId;
-    
+
+    // groupId
     public final String group;
-    
+
+    // namespaceId
     public final String tenant;
-    
+    /**
+     * cacheData的监听器列表
+     * 监听配置是在cacheData中配置上监听器，等待触发条件后，进行本地的内容和远程内容的比对，
+     * 如果不一致，调用监听器上的回调逻辑，完成配置的更新通知。
+     */
     private final CopyOnWriteArrayList<ManagerListenerWrap> listeners;
-    
+
+    // 配置信息的md5值，用来判断配置有没有变更
     private volatile String md5;
-    
+
     /**
      * whether use local config.
+     *
+     * 是否使用本地缓存
      */
     private volatile boolean isUseLocalConfig = false;
-    
+
     /**
      * last modify time.
+     *
+     *上次配置修改时间
      */
     private volatile long localConfigLastModified;
-    
+    // 具体的配置内容
     private volatile String content;
-    
+    // 加密数据的key
     private volatile String encryptedDataKey;
-    
+
     /**
      * local cache change timestamp.
+     *
+     * 修改时间
      */
     private final AtomicLong lastModifiedTs = new AtomicLong(0);
-    
+
     /**
      * notify change flag,for notify&sync concurrent control. 1.reset to false if starting to sync with server. 2.update
      * to true if receive config change notification.
      */
     private final AtomicBoolean receiveNotifyChanged = new AtomicBoolean(false);
-    
+    // 任务ID
     private int taskId;
-    
+
+    // 是否初始化
     private volatile boolean isInitializing = true;
-    
+
     /**
      * if is cache data md5 sync with the server.
+     *
+     * 是否和服务端同步
      */
     private final AtomicBoolean isConsistentWithServer = new AtomicBoolean();
-    
+
     /**
      * if is cache data is discard,need to remove.
+     *
+     * 是否丢失
      */
     private volatile boolean isDiscard = false;
-    
+
+    // 类型
     private String type;
-    
+
     public boolean isInitializing() {
         return isInitializing;
     }
-    
+
     public void setInitializing(boolean isInitializing) {
         this.isInitializing = isInitializing;
     }
-    
+
     public String getMd5() {
         return md5;
     }
-    
+
     public String getTenant() {
         return tenant;
     }
-    
+
     public String getContent() {
         return content;
     }
-    
+
     public void setContent(String content) {
         this.content = content;
         this.md5 = getMd5String(this.content);
     }
-    
+
     public AtomicBoolean getReceiveNotifyChanged() {
         return receiveNotifyChanged;
     }
-    
+
     /**
      * Getter method for property <tt>lastModifiedTs</tt>.
      *
@@ -191,7 +212,7 @@ public class CacheData {
     public AtomicLong getLastModifiedTs() {
         return lastModifiedTs;
     }
-    
+
     /**
      * Setter method for property <tt>lastModifiedTs</tt>.
      *
@@ -200,15 +221,15 @@ public class CacheData {
     public void setLastModifiedTs(long lastModifiedTs) {
         this.lastModifiedTs.set(lastModifiedTs);
     }
-    
+
     public String getType() {
         return type;
     }
-    
+
     public void setType(String type) {
         this.type = type;
     }
-    
+
     /**
      * Add listener if CacheData already set new content, Listener should init lastCallMd5 by CacheData.md5
      *
@@ -231,13 +252,13 @@ public class CacheData {
         } else {
             wrap = new ManagerListenerWrap(listener, md5);
         }
-        
+
         if (listeners.addIfAbsent(wrap)) {
             LOGGER.info("[{}] [add-listener] ok, tenant={}, dataId={}, group={}, cnt={}", envName, tenant, dataId,
                     group, listeners.size());
         }
     }
-    
+
     /**
      * Remove listener.
      *
@@ -253,7 +274,7 @@ public class CacheData {
                     tenant, listeners.size());
         }
     }
-    
+
     /**
      * Returns the iterator on the listener list, read-only. It is guaranteed not to return NULL.
      */
@@ -264,34 +285,34 @@ public class CacheData {
         }
         return result;
     }
-    
+
     public long getLocalConfigInfoVersion() {
         return localConfigLastModified;
     }
-    
+
     public void setLocalConfigInfoVersion(long localConfigLastModified) {
         this.localConfigLastModified = localConfigLastModified;
     }
-    
+
     public boolean isUseLocalConfigInfo() {
         return isUseLocalConfig;
     }
-    
+
     public void setUseLocalConfigInfo(boolean useLocalConfigInfo) {
         this.isUseLocalConfig = useLocalConfigInfo;
         if (!useLocalConfigInfo) {
             localConfigLastModified = -1;
         }
     }
-    
+
     public int getTaskId() {
         return taskId;
     }
-    
+
     public void setTaskId(int taskId) {
         this.taskId = taskId;
     }
-    
+
     @Override
     public int hashCode() {
         final int prime = 31;
@@ -300,7 +321,7 @@ public class CacheData {
         result = prime * result + ((group == null) ? 0 : group.hashCode());
         return result;
     }
-    
+
     @Override
     public boolean equals(Object obj) {
         if (null == obj || obj.getClass() != getClass()) {
@@ -312,20 +333,25 @@ public class CacheData {
         CacheData other = (CacheData) obj;
         return dataId.equals(other.dataId) && group.equals(other.group);
     }
-    
+
     @Override
     public String toString() {
         return "CacheData [" + dataId + ", " + group + "]";
     }
-    
+
+    // cacheData的校验方法
     void checkListenerMd5() {
+
+        // 遍历这个配置所有的监听者
         for (ManagerListenerWrap wrap : listeners) {
             if (!md5.equals(wrap.lastCallMd5)) {
+                // 如果内容变动了，直接通知监听器处理，并且更新 listenerWrap 中的 content、Md5
+                // TODO 进入
                 safeNotifyListener(dataId, group, content, type, md5, encryptedDataKey, wrap);
             }
         }
     }
-    
+
     /**
      * check if all listeners md5 is equal with cache data.
      */
@@ -337,9 +363,9 @@ public class CacheData {
         }
         return true;
     }
-    
+
     class LongNotifyHandler implements Runnable {
-        
+
         public LongNotifyHandler(String listenerClass, String dataId, String group, String tenant, String md5,
                 long timeoutMills, Thread thread) {
             this.listenerClass = listenerClass;
@@ -350,23 +376,23 @@ public class CacheData {
             this.timeoutMills = timeoutMills;
             this.thread = thread;
         }
-        
+
         String listenerClass;
-        
+
         long startTime = System.currentTimeMillis();
-        
+
         long timeoutMills;
-        
+
         String dataId;
-        
+
         String group;
-        
+
         String tenant;
-        
+
         String md5;
-        
+
         Thread thread;
-        
+
         @Override
         public void run() {
             String blockTrace = getTrace(thread.getStackTrace(), 5);
@@ -377,9 +403,9 @@ public class CacheData {
                     new ChangeNotifyBlockEvent(this.listenerClass, dataId, group, tenant, this.startTime,
                             System.currentTimeMillis(), blockTrace));
         }
-        
+
     }
-    
+
     private static String getTrace(StackTraceElement[] stackTrace, int traceDeep) {
         StringBuilder stringBuilder = new StringBuilder();
         stringBuilder.append("\n");
@@ -394,9 +420,10 @@ public class CacheData {
         }
         return stringBuilder.toString();
     }
-    
+
     private void safeNotifyListener(final String dataId, final String group, final String content, final String type,
             final String md5, final String encryptedDataKey, final ManagerListenerWrap listenerWrap) {
+        // 获取到监听器
         final Listener listener = listenerWrap.listener;
         if (listenerWrap.inNotifying) {
             LOGGER.warn(
@@ -404,15 +431,16 @@ public class CacheData {
                     envName, dataId, group, tenant, md5, listener);
             return;
         }
+        // 定义一个通知任务
         NotifyTask job = new NotifyTask() {
-            
+
             @Override
             public void run() {
                 long start = System.currentTimeMillis();
                 ClassLoader myClassLoader = Thread.currentThread().getContextClassLoader();
                 ClassLoader appClassLoader = listener.getClass().getClassLoader();
                 ScheduledFuture<?> timeSchedule = null;
-                
+
                 try {
                     if (listener instanceof AbstractSharedListener) {
                         AbstractSharedListener adapter = (AbstractSharedListener) listener;
@@ -424,7 +452,7 @@ public class CacheData {
                     // the specific webapp to avoid exceptions or misuses when calling the spi interface in
                     // the callback method (this problem occurs only in multi-application deployment).
                     Thread.currentThread().setContextClassLoader(appClassLoader);
-                    
+
                     ConfigResponse cr = new ConfigResponse();
                     cr.setDataId(dataId);
                     cr.setGroup(group);
@@ -437,16 +465,24 @@ public class CacheData {
                                     notifyWarnTimeout, Thread.currentThread()), notifyWarnTimeout,
                             TimeUnit.MILLISECONDS);
                     listenerWrap.inNotifying = true;
+                    // 回调通知，也就是通知变动的内容
+                    // 这里就是执行前面说到的注册监听时的一个回调函数，里面其实最主要的就是发布了一个RefreshEvent事件，springcloud会处理这个事件
+                    // TODO 进入
+                    // receiveConfigInfo()方法到底做了什么事情呢？我们不妨来看看之前注册监听器的代码
+                    // com.alibaba.cloud.nacos.refresh.NacosContextRefresher#registerNacosListener
+                    // receiveConfigInfo()方法最终执行的就是AbstractSharedListener#innerReceive()方法
+                    // 主要是发布了一个RefreshEvent事件，RefreshEvent 事件主要由 SpringCloud 相关类来处理
                     listener.receiveConfigInfo(contentTmp);
                     // compare lastContent and content
                     if (listener instanceof AbstractConfigChangeListener) {
+                        // 扩展点，告知配置内容的变动
                         Map<String, ConfigChangeItem> data = ConfigChangeHandler.getInstance()
                                 .parseChangeData(listenerWrap.lastContent, contentTmp, type);
                         ConfigChangeEvent event = new ConfigChangeEvent(data);
                         ((AbstractConfigChangeListener) listener).receiveConfigChange(event);
                         listenerWrap.lastContent = contentTmp;
                     }
-                    
+                    // 赋值最新的md5
                     listenerWrap.lastCallMd5 = md5;
                     LOGGER.info(
                             "[{}] [notify-ok] dataId={}, group={},tenant={}, md5={}, listener={} ,job run cost={} millis.",
@@ -468,8 +504,9 @@ public class CacheData {
                 }
             }
         };
-        
+
         try {
+            // 监听器配置了异步执行器，就异步执行
             if (null != listener.getExecutor()) {
                 LOGGER.info(
                         "[{}] [notify-listener] task submitted to user executor, dataId={}, group={},tenant={}, md5={}, listener={} ",
@@ -477,6 +514,7 @@ public class CacheData {
                 job.async = true;
                 listener.getExecutor().execute(job);
             } else {
+                // 同步执行
                 LOGGER.info(
                         "[{}] [notify-listener] task execute in nacos thread, dataId={}, group={},tenant={}, md5={}, listener={} ",
                         envName, dataId, group, tenant, md5, listener);
@@ -487,32 +525,32 @@ public class CacheData {
                     envName, dataId, group, tenant, md5, listener, t.getCause());
         }
     }
-    
+
     @SuppressWarnings("PMD.AbstractClassShouldStartWithAbstractNamingRule")
     abstract class NotifyTask implements Runnable {
-        
+
         boolean async = false;
-        
+
         public boolean isAsync() {
             return async;
         }
-        
+
         public void setAsync(boolean async) {
             this.async = async;
         }
-        
+
     }
-    
+
     public static String getMd5String(String config) {
         return (null == config) ? Constants.NULL : MD5Utils.md5Hex(config, Constants.ENCODE);
     }
-    
+
     private String loadCacheContentFromDiskLocal(String name, String dataId, String group, String tenant) {
         String content = LocalConfigInfoProcessor.getFailover(name, dataId, group, tenant);
         content = (null != content) ? content : LocalConfigInfoProcessor.getSnapshot(name, dataId, group, tenant);
         return content;
     }
-    
+
     /**
      * 1.first add listener.default is false;need to check. 2.receive config change notify,set false;need to check.
      * 3.last listener is remove,set to false;need to check
@@ -522,23 +560,23 @@ public class CacheData {
     public boolean isConsistentWithServer() {
         return isConsistentWithServer.get();
     }
-    
+
     public void setConsistentWithServer(boolean consistentWithServer) {
         isConsistentWithServer.set(consistentWithServer);
     }
-    
+
     public boolean isDiscard() {
         return isDiscard;
     }
-    
+
     public void setDiscard(boolean discard) {
         isDiscard = discard;
     }
-    
+
     public CacheData(ConfigFilterChainManager configFilterChainManager, String envName, String dataId, String group) {
         this(configFilterChainManager, envName, dataId, group, TenantUtil.getUserTenantForAcm());
     }
-    
+
     public CacheData(ConfigFilterChainManager configFilterChainManager, String envName, String dataId, String group,
             String tenant) {
         if (null == dataId || null == group) {
@@ -557,55 +595,55 @@ public class CacheData {
             this.md5 = getMd5String(this.content);
         }
     }
-    
+
     // ==================
-    
+
     public String getEncryptedDataKey() {
         return encryptedDataKey;
     }
-    
+
     public void setEncryptedDataKey(String encryptedDataKey) {
         this.encryptedDataKey = encryptedDataKey;
     }
-    
+
     private String loadEncryptedDataKeyFromDiskLocal(String envName, String dataId, String group, String tenant) {
         String encryptedDataKey = LocalEncryptedDataKeyProcessor.getEncryptDataKeyFailover(envName, dataId, group,
                 tenant);
-        
+
         if (encryptedDataKey != null) {
             return encryptedDataKey;
         }
-        
+
         return LocalEncryptedDataKeyProcessor.getEncryptDataKeySnapshot(envName, dataId, group, tenant);
     }
-    
+
     private static class ManagerListenerWrap {
-        
+
         boolean inNotifying = false;
-        
+
         final Listener listener;
-        
+
         String lastCallMd5 = Constants.NULL;
-        
+
         /**
          * here is a decryptContent.
          */
         String lastContent = null;
-        
+
         ManagerListenerWrap(Listener listener) {
             this.listener = listener;
         }
-        
+
         ManagerListenerWrap(Listener listener, String md5) {
             this.listener = listener;
             this.lastCallMd5 = md5;
         }
-        
+
         ManagerListenerWrap(Listener listener, String md5, String lastContent) {
             this(listener, md5);
             this.lastContent = lastContent;
         }
-        
+
         @Override
         public boolean equals(Object obj) {
             if (null == obj || obj.getClass() != getClass()) {
@@ -617,11 +655,11 @@ public class CacheData {
             ManagerListenerWrap other = (ManagerListenerWrap) obj;
             return listener.equals(other.listener);
         }
-        
+
         @Override
         public int hashCode() {
             return super.hashCode();
         }
-        
+
     }
 }

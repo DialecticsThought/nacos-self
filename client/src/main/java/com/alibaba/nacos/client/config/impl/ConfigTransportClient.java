@@ -42,47 +42,47 @@ import java.util.concurrent.TimeUnit;
  */
 @SuppressWarnings("PMD.AbstractClassShouldStartWithAbstractNamingRule")
 public abstract class ConfigTransportClient {
-    
+
     private static final String CONFIG_INFO_HEADER = "exConfigInfo";
-    
+
     private static final String DEFAULT_CONFIG_INFO = "true";
-    
+
     String encode;
-    
+
     String tenant;
-    
+
     ScheduledExecutorService executor;
-    
+
     final ServerListManager serverListManager;
-    
+
     final Properties properties;
-    
+
     private int maxRetry = 3;
-    
+
     private final long securityInfoRefreshIntervalMills = TimeUnit.SECONDS.toMillis(5);
-    
+
     protected SecurityProxy securityProxy;
-    
+
     public void shutdown() throws NacosException {
         securityProxy.shutdown();
     }
-    
+
     public ConfigTransportClient(NacosClientProperties properties, ServerListManager serverListManager) {
-        
+
         String encodeTmp = properties.getProperty(PropertyKeyConst.ENCODE);
         if (StringUtils.isBlank(encodeTmp)) {
             this.encode = Constants.ENCODE;
         } else {
             this.encode = encodeTmp.trim();
         }
-        
+
         this.tenant = properties.getProperty(PropertyKeyConst.NAMESPACE);
         this.serverListManager = serverListManager;
         this.properties = properties.asProperties();
         this.securityProxy = new SecurityProxy(serverListManager.getServerUrls(),
                 ConfigHttpClientManager.getInstance().getNacosRestTemplate());
     }
-    
+
     /**
      * Build the resource for current request.
      *
@@ -94,11 +94,11 @@ public abstract class ConfigTransportClient {
     protected RequestResource buildResource(String tenant, String group, String dataId) {
         return RequestResource.configBuilder().setNamespace(tenant).setGroup(group).setResource(dataId).build();
     }
-    
+
     protected Map<String, String> getSecurityHeaders(RequestResource resource) throws Exception {
         return securityProxy.getIdentityContext(resource);
     }
-    
+
     /**
      * get common header.
      *
@@ -106,10 +106,10 @@ public abstract class ConfigTransportClient {
      */
     protected Map<String, String> getCommonHeader() {
         Map<String, String> headers = new HashMap<>(16);
-        
+
         String ts = String.valueOf(System.currentTimeMillis());
         String token = MD5Utils.md5Hex(ts + ParamUtil.getAppKey(), Constants.ENCODE);
-        
+
         headers.put(Constants.CLIENT_APPNAME_HEADER, ParamUtil.getAppName());
         headers.put(Constants.CLIENT_REQUEST_TS_HEADER, ts);
         headers.put(Constants.CLIENT_REQUEST_TOKEN_HEADER, token);
@@ -117,39 +117,43 @@ public abstract class ConfigTransportClient {
         headers.put(Constants.CHARSET_KEY, encode);
         return headers;
     }
-    
+
     private void initMaxRetry(Properties properties) {
         maxRetry = ConvertUtils.toInt(String.valueOf(properties.get(PropertyKeyConst.MAX_RETRY)), Constants.MAX_RETRY);
     }
-    
+
     public void setExecutor(ScheduledExecutorService executor) {
         this.executor = executor;
     }
-    
+
     /**
      * base start client.
      */
     public void start() throws NacosException {
+        // 认证服务，主要是通过Secret Key和Access Key做认证用
         securityProxy.login(this.properties);
+        // 每隔5s执行一次认证
         this.executor.scheduleWithFixedDelay(() -> securityProxy.login(properties), 0,
                 this.securityInfoRefreshIntervalMills, TimeUnit.MILLISECONDS);
+        // 内部启动
+        // TODO 进入
         startInternal();
     }
-    
+
     /**
      * start client inner.
      *
      * @throws NacosException exception may throw.
      */
     public abstract void startInternal() throws NacosException;
-    
+
     /**
      * get client name.
      *
      * @return name.
      */
     public abstract String getName();
-    
+
     /**
      * get encode.
      *
@@ -158,7 +162,7 @@ public abstract class ConfigTransportClient {
     public String getEncode() {
         return this.encode;
     }
-    
+
     /**
      * get tenant.
      *
@@ -167,19 +171,19 @@ public abstract class ConfigTransportClient {
     public String getTenant() {
         return this.tenant;
     }
-    
+
     /**
      * notify listen config.
      **/
     public abstract void notifyListenConfig();
-    
+
     /**
      * listen change .
      *
      * @throws NacosException nacos exception throws, should retry.
      */
     public abstract void executeConfigListen() throws NacosException;
-    
+
     /**
      * remove cache implements.
      *
@@ -187,7 +191,7 @@ public abstract class ConfigTransportClient {
      * @param group  group
      */
     public abstract void removeCache(String dataId, String group);
-    
+
     /**
      * query config.
      *
@@ -201,7 +205,7 @@ public abstract class ConfigTransportClient {
      */
     public abstract ConfigResponse queryConfig(String dataId, String group, String tenat, long readTimeous,
             boolean notify) throws NacosException;
-    
+
     /**
      * publish config.
      *
@@ -220,7 +224,7 @@ public abstract class ConfigTransportClient {
      */
     public abstract boolean publishConfig(String dataId, String group, String tenant, String appName, String tag,
             String betaIps, String content, String encryptedDataKey, String casMd5, String type) throws NacosException;
-    
+
     /**
      * remove config.
      *
@@ -232,5 +236,5 @@ public abstract class ConfigTransportClient {
      * @throws NacosException throw where publish fail.
      */
     public abstract boolean removeConfig(String dataid, String group, String tenat, String tag) throws NacosException;
-    
+
 }
