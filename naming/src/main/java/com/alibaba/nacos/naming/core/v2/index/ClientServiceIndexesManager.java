@@ -49,6 +49,7 @@ import java.util.concurrent.ConcurrentMap;
 public class ClientServiceIndexesManager extends SmartSubscriber {
     /**
      * 服务与发布这个服务的客户端的关联关系
+     * key是service，value就是clientId的集合
      */
     private final ConcurrentMap<Service, Set<String>> publisherIndexes = new ConcurrentHashMap<>();
 
