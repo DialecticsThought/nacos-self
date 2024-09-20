@@ -40,13 +40,13 @@ import java.util.Objects;
  * @date 2020/7/5 12:19 PM
  */
 public class DumpProcessor implements NacosTaskProcessor {
-    
+
     final ConfigInfoPersistService configInfoPersistService;
-    
+
     final ConfigInfoBetaPersistService configInfoBetaPersistService;
-    
+
     final ConfigInfoTagPersistService configInfoTagPersistService;
-    
+
     public DumpProcessor(ConfigInfoPersistService configInfoPersistService,
             ConfigInfoBetaPersistService configInfoBetaPersistService,
             ConfigInfoTagPersistService configInfoTagPersistService) {
@@ -54,7 +54,7 @@ public class DumpProcessor implements NacosTaskProcessor {
         this.configInfoBetaPersistService = configInfoBetaPersistService;
         this.configInfoTagPersistService = configInfoTagPersistService;
     }
-    
+
     @Override
     public boolean process(NacosTask task) {
         DumpTask dumpTask = (DumpTask) task;
@@ -66,6 +66,7 @@ public class DumpProcessor implements NacosTaskProcessor {
         String handleIp = dumpTask.getHandleIp();
         boolean isBeta = dumpTask.isBeta();
         String tag = dumpTask.getTag();
+        // 构建ConfigDumpEventBuild
         ConfigDumpEvent.ConfigDumpEventBuilder build = ConfigDumpEvent.builder().namespaceId(tenant).dataId(dataId)
                 .group(group).isBeta(isBeta).tag(tag).handleIp(handleIp);
         String type = "formal";
@@ -75,9 +76,10 @@ public class DumpProcessor implements NacosTaskProcessor {
             type = "tag-" + tag;
         }
         LogUtil.DUMP_LOG.info("[dump] process {} task. groupKey={}", type, dumpTask.getGroupKey());
-        
+
         if (isBeta) {
             // if publish beta, then dump config, update beta cache
+            // 如果发布测试版，则转储配置，更新测试版缓存
             ConfigInfoBetaWrapper cf = configInfoBetaPersistService.findConfigInfo4Beta(dataId, group, tenant);
             build.remove(Objects.isNull(cf));
             build.betaIps(Objects.isNull(cf) ? null : cf.getBetaIps());
@@ -87,8 +89,11 @@ public class DumpProcessor implements NacosTaskProcessor {
             build.lastModifiedTs(Objects.isNull(cf) ? lastModifiedOut : cf.getLastModified());
             return DumpConfigHandler.configDump(build.build());
         }
-        
+
         if (StringUtils.isNotBlank(tag)) {
+            // tag为空的情况，正常情况下都是走的这个分支
+
+            // 查看配置信息
             ConfigInfoTagWrapper cf = configInfoTagPersistService.findConfigInfo4Tag(dataId, group, tenant, tag);
             build.remove(Objects.isNull(cf));
             build.content(Objects.isNull(cf) ? null : cf.getContent());
@@ -97,14 +102,17 @@ public class DumpProcessor implements NacosTaskProcessor {
             build.lastModifiedTs(Objects.isNull(cf) ? lastModifiedOut : cf.getLastModified());
             return DumpConfigHandler.configDump(build.build());
         }
-        
+
         ConfigInfoWrapper cf = configInfoPersistService.findConfigInfo(dataId, group, tenant);
         build.remove(Objects.isNull(cf));
         build.content(Objects.isNull(cf) ? null : cf.getContent());
         build.type(Objects.isNull(cf) ? null : cf.getType());
         build.encryptedDataKey(Objects.isNull(cf) ? null : cf.getEncryptedDataKey());
         build.lastModifiedTs(Objects.isNull(cf) ? lastModifiedOut : cf.getLastModified());
+
+        // 构建出ConfigDumpEvent，然后触发dump配置
+        // TODO 进入
         return DumpConfigHandler.configDump(build.build());
-        
+
     }
 }

@@ -27,17 +27,19 @@ import com.alibaba.nacos.sys.env.EnvUtil;
  * @author <a href="mailto:liaochuntao@live.com">liaochuntao</a>
  */
 public class ConfigChangePublisher {
-    
+
     /**
      * Notify ConfigChange.
      *
      * @param event ConfigDataChangeEvent instance.
      */
     public static void notifyConfigChange(ConfigDataChangeEvent event) {
+        // 如果是内部存储并且Nacos非单机模式启动，就不处理了
         if (DatasourceConfiguration.isEmbeddedStorage() && !EnvUtil.getStandaloneMode()) {
             return;
         }
+        // TODO 查看 ConfigDataChangeEvent的onEvent方法 就是AsyncNotifyService 类里面
         NotifyCenter.publishEvent(event);
     }
-    
+
 }

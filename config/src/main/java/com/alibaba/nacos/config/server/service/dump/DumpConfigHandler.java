@@ -32,7 +32,7 @@ import com.alibaba.nacos.config.server.service.trace.ConfigTraceService;
  * @author <a href="mailto:liaochuntao@live.com">liaochuntao</a>
  */
 public class DumpConfigHandler extends Subscriber<ConfigDumpEvent> {
-    
+
     /**
      * trigger config dump event.
      *
@@ -47,6 +47,7 @@ public class DumpConfigHandler extends Subscriber<ConfigDumpEvent> {
         final String type = event.getType();
         final long lastModified = event.getLastModifiedTs();
         //beta
+        //beta测试版
         if (event.isBeta()) {
             boolean result = false;
             if (event.isRemove()) {
@@ -66,15 +67,17 @@ public class DumpConfigHandler extends Subscriber<ConfigDumpEvent> {
                             System.currentTimeMillis() - lastModified, content.length());
                 }
             }
-            
+
             return result;
         }
-        
+
         //tag
+        //tag不为空的处理
         if (StringUtils.isNotBlank(event.getTag())) {
             //
             boolean result;
             if (!event.isRemove()) {
+                // 非删除配置事件
                 result = ConfigCacheService.dumpTag(dataId, group, namespaceId, event.getTag(), content, lastModified,
                         event.getEncryptedDataKey());
                 if (result) {
@@ -83,6 +86,7 @@ public class DumpConfigHandler extends Subscriber<ConfigDumpEvent> {
                             System.currentTimeMillis() - lastModified, content.length());
                 }
             } else {
+                // 删除配置事件，移除配置缓存
                 result = ConfigCacheService.removeTag(dataId, group, namespaceId, event.getTag());
                 if (result) {
                     ConfigTraceService.logDumpTagEvent(dataId, group, namespaceId, event.getTag(), null, lastModified,
@@ -92,46 +96,53 @@ public class DumpConfigHandler extends Subscriber<ConfigDumpEvent> {
             }
             return result;
         }
-        
+
         //default
+        // 内置的一些特殊配置
         if (dataId.equals(AggrWhitelist.AGGRIDS_METADATA)) {
             AggrWhitelist.load(content);
         }
-        
+
         if (dataId.equals(ClientIpWhiteList.CLIENT_IP_WHITELIST_METADATA)) {
             ClientIpWhiteList.load(content);
         }
-        
+
         if (dataId.equals(SwitchService.SWITCH_META_DATA_ID)) {
             SwitchService.load(content);
         }
-        
+
         boolean result;
         if (!event.isRemove()) {
+            // 非删除事件：配置缓存服务dump配置信息
+            // TODO 进入
             result = ConfigCacheService.dump(dataId, group, namespaceId, content, lastModified, event.getType(),
                     event.getEncryptedDataKey());
-            
+
             if (result) {
+                // 记录日志
                 ConfigTraceService.logDumpEvent(dataId, group, namespaceId, null, lastModified, event.getHandleIp(),
                         ConfigTraceService.DUMP_TYPE_OK, System.currentTimeMillis() - lastModified, content.length());
             }
         } else {
+            // 删除配置事件，移除配置缓存
+            // TODO 查看
             result = ConfigCacheService.remove(dataId, group, namespaceId);
-            
+
             if (result) {
+                // 记录日志
                 ConfigTraceService.logDumpEvent(dataId, group, namespaceId, null, lastModified, event.getHandleIp(),
                         ConfigTraceService.DUMP_TYPE_REMOVE_OK, System.currentTimeMillis() - lastModified, 0);
             }
         }
         return result;
-        
+
     }
-    
+
     @Override
     public void onEvent(ConfigDumpEvent event) {
         configDump(event);
     }
-    
+
     @Override
     public Class<? extends Event> subscribeType() {
         return ConfigDumpEvent.class;

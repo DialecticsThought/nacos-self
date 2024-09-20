@@ -31,14 +31,14 @@ import java.util.stream.Stream;
  * @author lixiaoshuang
  */
 public class EncryptionHandler {
-    
+
     private static final Logger LOGGER = LoggerFactory.getLogger(EncryptionHandler.class);
-    
+
     /**
      * For example：cipher-AES-dataId.
      */
     private static final String PREFIX = "cipher-";
-    
+
     /**
      * Execute encryption.
      *
@@ -47,22 +47,36 @@ public class EncryptionHandler {
      * @return Return key and ciphertext.
      */
     public static Pair<String, String> encryptHandler(String dataId, String content) {
+        // 检查是否需要加密
         if (!checkCipher(dataId)) {
             return Pair.with("", content);
         }
         Optional<String> algorithmName = parseAlgorithmName(dataId);
+        // 获取加密的处理类
+        // EncryptionPluginManager.instance(): 返回单例实例 TODO 查看
+        /**
+         * 重要的还是这种插件化的思想，它仅仅依赖于原生JDK的SPI机制，可以按需扩展和定制：
+         *
+         * 1、提供给插件化的接口，由第三方去实现（自定义功能）
+         * 2、在初始化的时候，Nacos去加载处理类
+         */
         Optional<EncryptionPluginService> optional = algorithmName.flatMap(
                 EncryptionPluginManager.instance()::findEncryptionService);
         if (!optional.isPresent()) {
             LOGGER.warn("[EncryptionHandler] [encryptHandler] No encryption program with the corresponding name found");
+
+            // 获取不到，还是走非加密型
             return Pair.with("", content);
         }
         EncryptionPluginService encryptionPluginService = optional.get();
+        // 根据扩展的插件类，获取密钥
         String secretKey = encryptionPluginService.generateSecretKey();
+
+        // 利用密钥加密
         String encryptContent = encryptionPluginService.encrypt(secretKey, content);
         return Pair.with(encryptionPluginService.encryptSecretKey(secretKey), encryptContent);
     }
-    
+
     /**
      * Execute decryption.
      *
@@ -87,7 +101,7 @@ public class EncryptionHandler {
         String decryptContent = encryptionPluginService.decrypt(decryptSecretKey, content);
         return Pair.with(decryptSecretKey, decryptContent);
     }
-    
+
     /**
      * Parse encryption algorithm name.
      *
@@ -97,7 +111,7 @@ public class EncryptionHandler {
     private static Optional<String> parseAlgorithmName(String dataId) {
         return Stream.of(dataId.split("-")).skip(1).findFirst();
     }
-    
+
     /**
      * Check if encryption and decryption is needed.
      *

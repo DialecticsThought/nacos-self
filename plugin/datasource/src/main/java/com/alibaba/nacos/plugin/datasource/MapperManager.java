@@ -39,19 +39,19 @@ import static com.alibaba.nacos.api.common.Constants.Exception.FIND_TABLE_ERROR_
  **/
 
 public class MapperManager {
-    
+
     private static final Logger LOGGER = LoggerFactory.getLogger(MapperManager.class);
-    
+
     public static final Map<String, Map<String, Mapper>> MAPPER_SPI_MAP = new HashMap<>();
-    
+
     private static final MapperManager INSTANCE = new MapperManager();
-    
+
     private boolean dataSourceLogEnable;
-    
+
     private MapperManager() {
         loadInitial();
     }
-    
+
     /**
      * Get the instance of MapperManager.
      * @return The instance of MapperManager.
@@ -60,7 +60,7 @@ public class MapperManager {
         INSTANCE.dataSourceLogEnable = isDataSourceLogEnable;
         return INSTANCE;
     }
-    
+
     /**
      * The init method.
      */
@@ -72,7 +72,7 @@ public class MapperManager {
                     mapper.getClass(), mapper.getDataSource(), mapper.getTableName());
         }
     }
-    
+
     /**
      * To join mapper in MAPPER_SPI_MAP.
      * @param mapper The mapper you want join.
@@ -84,13 +84,13 @@ public class MapperManager {
         putMapper(mapper);
         LOGGER.info("[MapperManager] join successfully.");
     }
-    
+
     private static void putMapper(Mapper mapper) {
         Map<String, Mapper> mapperMap = MAPPER_SPI_MAP.computeIfAbsent(mapper.getDataSource(), key ->
                 new HashMap<>(16));
         mapperMap.putIfAbsent(mapper.getTableName(), mapper);
     }
-    
+
     /**
      * Get the mapper by table name.
      *
@@ -105,11 +105,14 @@ public class MapperManager {
         if (StringUtils.isBlank(dataSource) || StringUtils.isBlank(tableName)) {
             throw new NacosRuntimeException(FIND_DATASOURCE_ERROR_CODE, "dataSource or tableName is null");
         }
+        // 从SPI缓存中获取，这个是在MapperManager构造方法中初始化的
+        // 查看META-INF/services/com.alibaba,nacos.plugin.datasource.mapper.Mapper
         Map<String, Mapper> tableMapper = MAPPER_SPI_MAP.get(dataSource);
         if (Objects.isNull(tableMapper)) {
             throw new NacosRuntimeException(FIND_DATASOURCE_ERROR_CODE,
                     "[MapperManager] Failed to find the datasource,dataSource:" + dataSource);
         }
+        // 根据表名称获取mapper
         Mapper mapper = tableMapper.get(tableName);
         if (Objects.isNull(mapper)) {
             throw new NacosRuntimeException(FIND_TABLE_ERROR_CODE,

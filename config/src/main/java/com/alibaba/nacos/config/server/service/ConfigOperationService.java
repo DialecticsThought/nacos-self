@@ -51,15 +51,15 @@ import java.util.Map;
 
 @Service
 public class ConfigOperationService {
-    
+
     private ConfigInfoPersistService configInfoPersistService;
-    
+
     private ConfigInfoTagPersistService configInfoTagPersistService;
-    
+
     private ConfigInfoBetaPersistService configInfoBetaPersistService;
-    
+
     private static final Logger LOGGER = LoggerFactory.getLogger(ConfigOperationService.class);
-    
+
     public ConfigOperationService(ConfigInfoPersistService configInfoPersistService,
             ConfigInfoTagPersistService configInfoTagPersistService,
             ConfigInfoBetaPersistService configInfoBetaPersistService) {
@@ -67,25 +67,31 @@ public class ConfigOperationService {
         this.configInfoTagPersistService = configInfoTagPersistService;
         this.configInfoBetaPersistService = configInfoBetaPersistService;
     }
-    
+
     /**
      * Adds or updates non-aggregated data.
      *
      * @throws NacosException NacosException.
+     * <pre>
+     *  通常情况下，我们发布配置，都不指定tag，其实就做了两件事：
+     * 1、插入或更新配置信息
+     * 2、发布配置数据变动事件
+     * </pre>
      */
     public Boolean publishConfig(ConfigForm configForm, ConfigRequestInfo configRequestInfo, String encryptedDataKey)
             throws NacosException {
-        
+        // 将配置高级信息转成Map键值对
         Map<String, Object> configAdvanceInfo = getConfigAdvanceInfo(configForm);
+        // 检查参数
         ParamUtils.checkParam(configAdvanceInfo);
-        
+
         if (AggrWhitelist.isAggrDataId(configForm.getDataId())) {
             LOGGER.warn("[aggr-conflict] {} attempt to publish single data, {}, {}", configRequestInfo.getSrcIp(),
                     configForm.getDataId(), configForm.getGroup());
             throw new NacosApiException(HttpStatus.FORBIDDEN.value(), ErrorCode.INVALID_DATA_ID,
                     "dataId:" + configForm.getDataId() + " is aggr");
         }
-        
+        // 构建ConfigInfo配置信息，发布配置最基本的五个参数： nameSpaceId、groupId、dataId、应用名称、配置内容
         ConfigInfo configInfo = new ConfigInfo(configForm.getDataId(), configForm.getGroup(),
                 configForm.getNamespaceId(), configForm.getAppName(), configForm.getContent());
         //set old md5
@@ -95,12 +101,16 @@ public class ConfigOperationService {
         configInfo.setType(configForm.getType());
         configInfo.setEncryptedDataKey(encryptedDataKey);
         ConfigOperateResult configOperateResult;
-        
+
         String persistEvent = ConfigTraceService.PERSISTENCE_EVENT;
-        
+        // 判断是否是beta测试版本
         if (StringUtils.isBlank(configRequestInfo.getBetaIps())) {
+            // 正常发布，大部分情况下，我们都没有指定tag
             if (StringUtils.isBlank(configForm.getTag())) {
                 if (StringUtils.isNotBlank(configRequestInfo.getCasMd5())) {
+                    // 1、插入 or 更新配置信息
+                    // 这里分为内置数据库（EmbeddedConfigInfoPersistServiceImpl）和外置数据库（ExternalConfigInfoPersistServiceImpl）操作，通常我们都是使用MySQL进行持久化存储
+                    // TODO 进入 ExternalConfigInfoPersistServiceImpl
                     configOperateResult = configInfoPersistService.insertOrUpdateCas(configRequestInfo.getSrcIp(),
                             configForm.getSrcUser(), configInfo, configAdvanceInfo);
                     if (!configOperateResult.isSuccess()) {
@@ -114,6 +124,8 @@ public class ConfigOperationService {
                     configOperateResult = configInfoPersistService.insertOrUpdate(configRequestInfo.getSrcIp(),
                             configForm.getSrcUser(), configInfo, configAdvanceInfo);
                 }
+                // 2、发布配置数据变动事件
+                // TODO 进入
                 ConfigChangePublisher.notifyConfigChange(
                         new ConfigDataChangeEvent(false, configForm.getDataId(), configForm.getGroup(),
                                 configForm.getNamespaceId(), configOperateResult.getLastModified()));
@@ -133,6 +145,7 @@ public class ConfigOperationService {
                     configOperateResult = configInfoTagPersistService.insertOrUpdateTag(configInfo, configForm.getTag(),
                             configRequestInfo.getSrcIp(), configForm.getSrcUser());
                 }
+                // 指定tag
                 persistEvent = ConfigTraceService.PERSISTENCE_EVENT_TAG + "-" + configForm.getTag();
                 ConfigChangePublisher.notifyConfigChange(
                         new ConfigDataChangeEvent(false, configForm.getDataId(), configForm.getGroup(),
@@ -160,12 +173,13 @@ public class ConfigOperationService {
                     new ConfigDataChangeEvent(true, configForm.getDataId(), configForm.getGroup(),
                             configForm.getNamespaceId(), configOperateResult.getLastModified()));
         }
+        // 日志跟踪
         ConfigTraceService.logPersistenceEvent(configForm.getDataId(), configForm.getGroup(),
                 configForm.getNamespaceId(), configRequestInfo.getRequestIpApp(), configOperateResult.getLastModified(),
                 InetUtils.getSelfIP(), persistEvent, ConfigTraceService.PERSISTENCE_TYPE_PUB, configForm.getContent());
         return true;
     }
-    
+
     /**
      * Synchronously delete all pre-aggregation data under a dataId.
      */
@@ -183,10 +197,10 @@ public class ConfigOperationService {
                 ConfigTraceService.PERSISTENCE_TYPE_REMOVE, null);
         ConfigChangePublisher.notifyConfigChange(
                 new ConfigDataChangeEvent(false, dataId, group, namespaceId, tag, time.getTime()));
-        
+
         return true;
     }
-    
+
     public Map<String, Object> getConfigAdvanceInfo(ConfigForm configForm) {
         Map<String, Object> configAdvanceInfo = new HashMap<>(10);
         MapUtil.putIfValNoNull(configAdvanceInfo, "config_tags", configForm.getConfigTags());
