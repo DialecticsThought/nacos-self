@@ -137,7 +137,7 @@ public class NacosConfigService implements ConfigService {
     @Override
     public void addListener(String dataId, String group, Listener listener) throws NacosException {
         // TODO 进入
-        // 配置监听：监听采用的回调的思想，当服务端通知的时候，调用回调方法
+        // TODO 配置监听：监听采用的回调的思想，当服务端通知的时候，调用回调方法
         worker.addTenantListeners(dataId, group, Collections.singletonList(listener));
     }
 

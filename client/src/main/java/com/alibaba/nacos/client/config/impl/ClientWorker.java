@@ -189,10 +189,10 @@ public class ClientWorker implements Closeable {
         group = blank2defaultGroup(group);
         // 命名空间ID
         String tenant = agent.getTenant();
-
         // 根据dataId,group和tenant获取一个cacheData
         // TODO 进入
         CacheData cache = addCacheDataIfAbsent(dataId, group, tenant);
+        // TODO 遍历传入的 listeners 列表，将每个监听器添加到 CacheData 中
         // 可以看到，一个配置文件可以有多个监听器
         synchronized (cache) {
             // 添加监听器
@@ -200,9 +200,11 @@ public class ClientWorker implements Closeable {
                 cache.addListener(listener);
             }
             // 非丢弃，删除类型
+            // TODO 丢弃可能意味着此配置数据在某些情况下（例如未能成功同步到服务器）不再可用
             cache.setDiscard(false);
-
             // 未同步到服务端
+            //  TODO 这个字段用于表示缓存的配置数据与服务器中的配置数据不一致。
+            //   也就是说，可能有新的数据尚未同步到服务器，或者客户端的配置数据已经过期
             cache.setConsistentWithServer(false);
             // ensure cache present in cacheMap
             if (getCache(dataId, group, tenant) != cache) {
@@ -225,7 +227,7 @@ public class ClientWorker implements Closeable {
      * @throws NacosException nacos exception
      */
     public void addTenantListenersWithContent(String dataId, String group, String content, String encryptedDataKey,
-            List<? extends Listener> listeners) throws NacosException {
+                                              List<? extends Listener> listeners) throws NacosException {
         group = blank2defaultGroup(group);
         String tenant = agent.getTenant();
         CacheData cache = addCacheDataIfAbsent(dataId, group, tenant);
@@ -337,7 +339,7 @@ public class ClientWorker implements Closeable {
      * @throws NacosException exception throw.
      */
     public boolean publishConfig(String dataId, String group, String tenant, String appName, String tag, String betaIps,
-            String content, String encryptedDataKey, String casMd5, String type) throws NacosException {
+                                 String content, String encryptedDataKey, String casMd5, String type) throws NacosException {
         return agent.publishConfig(dataId, group, tenant, appName, tag, betaIps, content, encryptedDataKey, casMd5,
                 type);
     }
@@ -391,6 +393,10 @@ public class ClientWorker implements Closeable {
      * @param group  group of data
      * @param tenant tenant of data
      * @return cache data
+     * <p>
+     * TODO  ClientWorker#addCacheDataIfAbsent 方法先从 cacheMap 中获取 CacheData 对象，
+     *   如果 cacheMap 中没有，就创建一个 CacheData 对象，并加入到 cacheMap 缓存中。
+     *   至此需要处理更新的配置都注册了监听器，一旦远程配置中心的配置发生了变化，对应的监听器就会做响应的处理。
      */
     public CacheData addCacheDataIfAbsent(String dataId, String group, String tenant) throws NacosException {
         // 从缓存中获取cacheData
@@ -405,6 +411,8 @@ public class ClientWorker implements Closeable {
             // multiple listeners on the same dataid+group and race condition,so
             // double check again
             // other listener thread beat me to set to cacheMap
+
+
             if (null != cacheFromMap) { // 双重检查
                 cache = cacheFromMap;
                 // reset so that server not hang this check
@@ -494,7 +502,7 @@ public class ClientWorker implements Closeable {
 
     @SuppressWarnings("PMD.ThreadPoolCreationRule")
     public ClientWorker(final ConfigFilterChainManager configFilterChainManager, ServerListManager serverListManager,
-            final NacosClientProperties properties) throws NacosException {
+                        final NacosClientProperties properties) throws NacosException {
         this.configFilterChainManager = configFilterChainManager;
 
         // 初始化timeout、taskPenaltyTime、enableRemoteSyncConfig属性
@@ -683,7 +691,7 @@ public class ClientWorker implements Closeable {
         }
 
         ConfigChangeNotifyResponse handleConfigChangeNotifyRequest(ConfigChangeNotifyRequest configChangeNotifyRequest,
-                String clientName) {
+                                                                   String clientName) {
             LOGGER.info("[{}] [server-push] config changed. dataId={}, group={},tenant={}", clientName,
                     configChangeNotifyRequest.getDataId(), configChangeNotifyRequest.getGroup(),
                     configChangeNotifyRequest.getTenant());
@@ -801,7 +809,7 @@ public class ClientWorker implements Closeable {
                             continue;
                         }
                         // 执行配置监听
-                        // TODO
+                        // TODO 进入
                         executeConfigListen();
                     } catch (Throwable e) {
                         LOGGER.error("[rpc listen execute] [rpc listen] exception", e);
@@ -827,15 +835,40 @@ public class ClientWorker implements Closeable {
             listenExecutebell.offer(bellItem);
         }
 
+        /**
+         * TODO
+         *  一个配置项 一个cacheData
+         *  eg:
+         *  # 数据库配置
+         *  db.url=jdbc:mysql://localhost:3306/mydb
+         *  db.username=root
+         *  db.password=secret
+         *  # 日志配置
+         *  log.level=INFO
+         *  log.filepath=/var/log/myapp.log
+         *  在这个例子中，以下每个行可以视为一个配置项：
+         *  db.url（数据库 URL）
+         *  db.username（数据库用户名）
+         *  db.password（数据库密码）
+         *  log.level（日志级别）
+         *  log.filepath（日志文件路径）
+         *  每个配置项可能对应一个 CacheData 对象，用于缓存其值和状态。例如，db.url、db.username、log.level 等都可以单独作为配置项存在于 Nacos 中
+         *  总结
+         *  配置是指一组相关的设置（如 application.properties），可以包含多个配置项。
+         *  配置项是具体的设置（如 db.url），用于定义应用程序的具体参数
+         *
+         * @throws NacosException
+         */
         @Override
         public void executeConfigListen() throws NacosException {
-            // 存放含有listen的cacheData
+            // TODO 存放含有listen的cacheData
             Map<String, List<CacheData>> listenCachesMap = new HashMap<>(16);
-            // 存放不含有listen的cacheData
+            // TODO 存放不含有listen的cacheData
             Map<String, List<CacheData>> removeListenCachesMap = new HashMap<>(16);
             long now = System.currentTimeMillis();
             // 当前时间 减去 上一次全量同步的时间，如果大于3分钟，表示到了全量同步的时间
             boolean needAllSync = now - lastAllSyncTime >= ALL_SYNC_INTERNAL;
+            // 遍历一个cacheMap 中的所有 CacheData 对象
             for (CacheData cache : cacheMap.get().values()) {
                 // 是否和服务端一致
                 synchronized (cache) {
@@ -846,13 +879,13 @@ public class ClientWorker implements Closeable {
                     if (cache.isConsistentWithServer()) {
                         // TODO 进入
                         cache.checkListenerMd5();
-                        if (!needAllSync) {
+                        if (!needAllSync) {// TODO 判断是否需要全量同步
                             continue;
                         }
                     }
 
                     // If local configuration information is used, then skip the processing directly.
-                    if (cache.isUseLocalConfigInfo()) {
+                    if (cache.isUseLocalConfigInfo()) {//TODO 如果当前 CacheData 使用的是本地配置，则跳过处理
                         continue;
                     }
 
@@ -873,6 +906,7 @@ public class ClientWorker implements Closeable {
             }
             // 如果需要和服务端数据同步，则listenCachesMap和removeListenCachesMap存放了本地数据，需要和服务端对比
             //execute check listen ,return true if has change keys.
+            // TODO 比较 listenCachesMap 中的本地数据与服务器数据，返回是否有变更的键
             boolean hasChangedKeys = checkListenCache(listenCachesMap);
 
             //execute check remove listen.
@@ -883,7 +917,7 @@ public class ClientWorker implements Closeable {
                 lastAllSyncTime = now;
             }
             //If has changed keys,notify re sync md5.
-            if (hasChangedKeys) {
+            if (hasChangedKeys) {// 如果检测到有变更的键，则调用 notifyListenConfig 方法，通知相关组件进行同步操作
                 // 服务端告知了有数据变动，则需要再同步一次
                 notifyListenConfig();
             }
@@ -893,6 +927,12 @@ public class ClientWorker implements Closeable {
         /**
          * Checks and handles local configuration for a given CacheData object. This method evaluates the use of
          * failover files for local configuration storage and updates the CacheData accordingly.
+         * <pre>
+         *  TODO
+         *   在配置管理中，故障转移通常指使用本地配置文件作为备用，以防远程配置源不可用。
+         *   这样，当连接到远程服务失败时，系统仍然可以使用本地保存的配置，从而保持正常运行。
+         *   例如，如果应用从 Nacos 服务器加载配置，当服务器不可用时，它会切换到本地存储的配置文件，以确保应用不停止。
+         * </pre>
          *
          * @param cacheData The CacheData object to be processed.
          */
@@ -903,15 +943,24 @@ public class ClientWorker implements Closeable {
             final String envName = cacheData.envName;
 
             // Check if a failover file exists for the specified dataId, group, and tenant.
+            // 调用 LocalConfigInfoProcessor 获取对应 dataId、group 和 tenant 的故障转移文件
             File file = LocalConfigInfoProcessor.getFailoverFile(envName, dataId, group, tenant);
 
             // If not using local config info and a failover file exists, load and use it.
+            // TODO 检查当前是否使用本地配置，且故障转移文件存在
             if (!cacheData.isUseLocalConfigInfo() && file.exists()) {
+                // 读取故障转移文件的内容
+                // TODO 进入
                 String content = LocalConfigInfoProcessor.getFailover(envName, dataId, group, tenant);
+                // 计算故障转移文件内容的 MD5 校验值
                 final String md5 = MD5Utils.md5Hex(content, Constants.ENCODE);
+                //更新 cacheData 的状态为使用本地配置
                 cacheData.setUseLocalConfigInfo(true);
+                // 设置 cacheData 的本地配置版本为故障转移文件的最后修改时间
                 cacheData.setLocalConfigInfoVersion(file.lastModified());
+                //将 cacheData 的内容更新为故障转移文件的内容
                 cacheData.setContent(content);
+                // 记录日志，提示故障转移文件已被创建，并输出相关信息（如 dataId、group、tenant、MD5 和内容）
                 LOGGER.warn(
                         "[{}] [failover-change] failover file created. dataId={}, group={}, tenant={}, md5={}, content={}",
                         envName, dataId, group, tenant, md5, ContentUtils.truncateContent(content));
@@ -919,7 +968,9 @@ public class ClientWorker implements Closeable {
             }
 
             // If use local config info, but the failover file is deleted, switch back to server config.
+            // TODO 检查当前是否使用本地配置，且故障转移文件不存在
             if (cacheData.isUseLocalConfigInfo() && !file.exists()) {
+                // 更新 cacheData 的状态为不使用本地配置
                 cacheData.setUseLocalConfigInfo(false);
                 LOGGER.warn("[{}] [failover-change] failover file deleted. dataId={}, group={}, tenant={}", envName,
                         dataId, group, tenant);
@@ -927,12 +978,18 @@ public class ClientWorker implements Closeable {
             }
 
             // When the failover file content changes, indicating a change in local configuration.
+            // TODO 检查当前是否使用本地配置，故障转移文件存在，并且本地配置版本与文件的最后修改时间不同（表示内容可能已更改）
             if (cacheData.isUseLocalConfigInfo() && file.exists()
                     && cacheData.getLocalConfigInfoVersion() != file.lastModified()) {
+                // 读取故障转移文件的新内容。
                 String content = LocalConfigInfoProcessor.getFailover(envName, dataId, group, tenant);
+                // 计算新内容的 MD5 校验值。
                 final String md5 = MD5Utils.md5Hex(content, Constants.ENCODE);
+                // 确保 cacheData 的状态为使用本地配置（虽然可能是重复的，但保证状态一致）
                 cacheData.setUseLocalConfigInfo(true);
+                // 更新 cacheData 的本地配置版本为新读取文件的最后修改时间
                 cacheData.setLocalConfigInfoVersion(file.lastModified());
+                // 将 cacheData 的内容更新为新读取的故障转移文件内容
                 cacheData.setContent(content);
                 LOGGER.warn(
                         "[{}] [failover-change] failover file changed. dataId={}, group={}, tenant={}, md5={}, content={}",
@@ -1191,18 +1248,17 @@ public class ClientWorker implements Closeable {
         }
 
         /**
-         *
-         * @param rpcClient 用于发送 RPC 请求的客户端实例
-         * @param dataId 要查询的配置的唯一标识符
-         * @param group 配置所属的组
-         * @param tenant  租户信息（如果使用了多租户）
+         * @param rpcClient    用于发送 RPC 请求的客户端实例
+         * @param dataId       要查询的配置的唯一标识符
+         * @param group        配置所属的组
+         * @param tenant       租户信息（如果使用了多租户）
          * @param readTimeouts 读取超时设置
-         * @param notify  是否启用通知功能
+         * @param notify       是否启用通知功能
          * @return
          * @throws NacosException
          */
         ConfigResponse queryConfigInner(RpcClient rpcClient, String dataId, String group, String tenant,
-                long readTimeouts, boolean notify) throws NacosException {
+                                        long readTimeouts, boolean notify) throws NacosException {
             // 请求
             ConfigQueryRequest request = ConfigQueryRequest.build(dataId, group, tenant);
             // 设置请求头
@@ -1306,7 +1362,7 @@ public class ClientWorker implements Closeable {
 
         @Override
         public boolean publishConfig(String dataId, String group, String tenant, String appName, String tag,
-                String betaIps, String content, String encryptedDataKey, String casMd5, String type)
+                                     String betaIps, String content, String encryptedDataKey, String casMd5, String type)
                 throws NacosException {
             try {
                 ConfigPublishRequest request = new ConfigPublishRequest(dataId, group, tenant, content);
