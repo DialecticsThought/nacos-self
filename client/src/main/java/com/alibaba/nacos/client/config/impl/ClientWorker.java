@@ -481,8 +481,10 @@ public class ClientWorker implements Closeable {
     public ConfigResponse getServerConfig(String dataId, String group, String tenant, long readTimeout, boolean notify)
             throws NacosException {
         if (StringUtils.isBlank(group)) {
+            // group 如果为空 设置为 DEFAULT_GROUP
             group = Constants.DEFAULT_GROUP;
         }
+        // TODO 进入
         return this.agent.queryConfig(dataId, group, tenant, readTimeout, notify);
     }
 
@@ -1175,6 +1177,7 @@ public class ClientWorker implements Closeable {
         @Override
         public ConfigResponse queryConfig(String dataId, String group, String tenant, long readTimeouts, boolean notify)
                 throws NacosException {
+            // 创建一个rpc客户端
             RpcClient rpcClient = getOneRunningClient();
             if (notify) {
                 CacheData cacheData = cacheMap.get().get(GroupKey.getKeyTenant(dataId, group, tenant));
@@ -1182,22 +1185,38 @@ public class ClientWorker implements Closeable {
                     rpcClient = ensureRpcClient(String.valueOf(cacheData.getTaskId()));
                 }
             }
-
+            // TODO 进入
             return queryConfigInner(rpcClient, dataId, group, tenant, readTimeouts, notify);
 
         }
 
+        /**
+         *
+         * @param rpcClient 用于发送 RPC 请求的客户端实例
+         * @param dataId 要查询的配置的唯一标识符
+         * @param group 配置所属的组
+         * @param tenant  租户信息（如果使用了多租户）
+         * @param readTimeouts 读取超时设置
+         * @param notify  是否启用通知功能
+         * @return
+         * @throws NacosException
+         */
         ConfigResponse queryConfigInner(RpcClient rpcClient, String dataId, String group, String tenant,
                 long readTimeouts, boolean notify) throws NacosException {
+            // 请求
             ConfigQueryRequest request = ConfigQueryRequest.build(dataId, group, tenant);
+            // 设置请求头
             request.putHeader(NOTIFY_HEADER, String.valueOf(notify));
-
+            // 真正网络调用 得到响应
             ConfigQueryResponse response = (ConfigQueryResponse) requestProxy(rpcClient, request, readTimeouts);
-
+            // 配置响应对象
+            // 创建一个 ConfigResponse 对象，用于存储最终的结果
             ConfigResponse configResponse = new ConfigResponse();
-            if (response.isSuccess()) {
+            if (response.isSuccess()) {// 成功
+                // 保存数据快照到本地
                 LocalConfigInfoProcessor.saveSnapshot(this.getName(), dataId, group, tenant, response.getContent());
                 configResponse.setContent(response.getContent());
+                // 配置类型
                 String configType;
                 if (StringUtils.isNotBlank(response.getContentType())) {
                     configType = response.getContentType();
@@ -1205,16 +1224,21 @@ public class ClientWorker implements Closeable {
                     configType = ConfigType.TEXT.getType();
                 }
                 configResponse.setConfigType(configType);
+                // 数据加密key
                 String encryptedDataKey = response.getEncryptedDataKey();
+                // 数据加密
                 LocalEncryptedDataKeyProcessor.saveEncryptDataKeySnapshot(agent.getName(), dataId, group, tenant,
                         encryptedDataKey);
                 configResponse.setEncryptedDataKey(encryptedDataKey);
                 return configResponse;
-            } else if (response.getErrorCode() == ConfigQueryResponse.CONFIG_NOT_FOUND) {
+            } else if (response.getErrorCode() == ConfigQueryResponse.CONFIG_NOT_FOUND) {//没有找到配置
+                //没有找到接口 会删除本地配置快照文件
                 LocalConfigInfoProcessor.saveSnapshot(this.getName(), dataId, group, tenant, null);
+                //也是删除本地加密的配置快照文件
                 LocalEncryptedDataKeyProcessor.saveEncryptDataKeySnapshot(agent.getName(), dataId, group, tenant, null);
                 return configResponse;
             } else if (response.getErrorCode() == ConfigQueryResponse.CONFIG_QUERY_CONFLICT) {
+                // 冲突 配置正在修改
                 LOGGER.error(
                         "[{}] [sub-server-error] get server config being modified concurrently, dataId={}, group={}, "
                                 + "tenant={}", this.getName(), dataId, group, tenant);

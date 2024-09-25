@@ -98,8 +98,18 @@ public class NacosConfigService implements ConfigService {
         properties.setProperty(PropertyKeyConst.NAMESPACE, namespace);
     }
 
+    /**
+     * TODO com.alibaba.cloud.nacos.client.NacosPropertySourceBuilder#loadNacosData会调用这个方法
+     *
+     * @param dataId    dataId
+     * @param group     group
+     * @param timeoutMs read timeout
+     * @return
+     * @throws NacosException
+     */
     @Override
     public String getConfig(String dataId, String group, long timeoutMs) throws NacosException {
+        // TODO 进入
         return getConfigInner(namespace, dataId, group, timeoutMs);
     }
 
@@ -164,11 +174,15 @@ public class NacosConfigService implements ConfigService {
     }
 
     private String getConfigInner(String tenant, String dataId, String group, long timeoutMs) throws NacosException {
+        // 组名为空就设置默认组名
         group = blank2defaultGroup(group);
+        // dataId group 校验
         ParamUtils.checkKeyParam(dataId, group);
+        // 配置响应对象
         ConfigResponse cr = new ConfigResponse();
-
+        //设置属性
         cr.setDataId(dataId);
+        //设置租户 namespaceid
         cr.setTenant(tenant);
         cr.setGroup(group);
 
@@ -177,11 +191,17 @@ public class NacosConfigService implements ConfigService {
         // but is maintained by user.
         // This is designed for certain scenario like client emergency reboot,
         // changing config needed in the same time, while nacos server is down.
+        //TODO
+        // 优先使用本地配置
+        // 如果存在的故障转移的配置内容 且能读取到配置信息 则直接返回了
+        // 这样设计的目的是当 server 挂了  又需要修改配置 就可以读本地目录
         String content = LocalConfigInfoProcessor.getFailover(worker.getAgentName(), dataId, group, tenant);
+        // 判断配置内容
         if (content != null) {
             LOGGER.warn("[{}] [get-config] get failover ok, dataId={}, group={}, tenant={}, config={}",
                     worker.getAgentName(), dataId, group, tenant, ContentUtils.truncateContent(content));
             cr.setContent(content);
+            // 数据加密处理
             String encryptedDataKey = LocalEncryptedDataKeyProcessor
                     .getEncryptDataKeyFailover(agent.getName(), dataId, group, tenant);
             cr.setEncryptedDataKey(encryptedDataKey);
@@ -191,6 +211,7 @@ public class NacosConfigService implements ConfigService {
         }
 
         try {
+            //TODO 去服务端获取数据  重点关注
             ConfigResponse response = worker.getServerConfig(dataId, group, tenant, timeoutMs, false);
             cr.setContent(response.getContent());
             cr.setEncryptedDataKey(response.getEncryptedDataKey());
@@ -205,13 +226,14 @@ public class NacosConfigService implements ConfigService {
             LOGGER.warn("[{}] [get-config] get from server error, dataId={}, group={}, tenant={}, msg={}",
                     worker.getAgentName(), dataId, group, tenant, ioe.toString());
         }
-
+        // 获取快照数据
         content = LocalConfigInfoProcessor.getSnapshot(worker.getAgentName(), dataId, group, tenant);
         if (content != null) {
             LOGGER.warn("[{}] [get-config] get snapshot ok, dataId={}, group={}, tenant={}, config={}",
                     worker.getAgentName(), dataId, group, tenant, ContentUtils.truncateContent(content));
         }
         cr.setContent(content);
+        // 数据加密处理
         String encryptedDataKey = LocalEncryptedDataKeyProcessor
                 .getEncryptDataKeySnapshot(agent.getName(), dataId, group, tenant);
         cr.setEncryptedDataKey(encryptedDataKey);
@@ -231,7 +253,7 @@ public class NacosConfigService implements ConfigService {
     }
 
     private boolean publishConfigInner(String tenant, String dataId, String group, String tag, String appName,
-            String betaIps, String content, String type, String casMd5) throws NacosException {
+                                       String betaIps, String content, String type, String casMd5) throws NacosException {
         group = blank2defaultGroup(group);
         ParamUtils.checkParam(dataId, group, content);
 
