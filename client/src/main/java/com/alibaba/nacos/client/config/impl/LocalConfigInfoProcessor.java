@@ -73,6 +73,7 @@ public class LocalConfigInfoProcessor {
         }
 
         try {
+            // TODO 读取文件内容
             return readFile(localPath);
         } catch (IOException ioe) {
             LOGGER.error("[" + serverName + "] get failover error, " + localPath, ioe);
@@ -221,6 +222,7 @@ public class LocalConfigInfoProcessor {
             tmp = new File(tmp, FAILOVER_FILE_CHILD_3);
             tmp = new File(tmp, tenant);
         }
+        // 最终返回一个 File 对象，其路径为 tmp 下的 group 文件夹，包含 dataId 文件。这表示故障转移配置文件的完整路径
         return new File(new File(tmp, group), dataId);
     }
 

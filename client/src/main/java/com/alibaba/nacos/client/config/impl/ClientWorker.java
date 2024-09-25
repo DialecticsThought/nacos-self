@@ -906,7 +906,7 @@ public class ClientWorker implements Closeable {
             }
             // 如果需要和服务端数据同步，则listenCachesMap和removeListenCachesMap存放了本地数据，需要和服务端对比
             //execute check listen ,return true if has change keys.
-            // TODO 比较 listenCachesMap 中的本地数据与服务器数据，返回是否有变更的键
+            // TODO 比较 listenCachesMap 中的本地数据与服务器数据，返回 是否有变更的键
             boolean hasChangedKeys = checkListenCache(listenCachesMap);
 
             //execute check remove listen.
@@ -950,7 +950,7 @@ public class ClientWorker implements Closeable {
             // TODO 检查当前是否使用本地配置，且故障转移文件存在
             if (!cacheData.isUseLocalConfigInfo() && file.exists()) {
                 // 读取故障转移文件的内容
-                // TODO 进入
+                // TODO 进入 可以看看代码
                 String content = LocalConfigInfoProcessor.getFailover(envName, dataId, group, tenant);
                 // 计算故障转移文件内容的 MD5 校验值
                 final String md5 = MD5Utils.md5Hex(content, Constants.ENCODE);
