@@ -25,17 +25,17 @@ import java.util.Map;
  * @author Nacos
  */
 public class SampleResult implements Serializable {
-    
+
     private static final long serialVersionUID = 2587823382317389453L;
-    
+    // SampleResult 是一个简单的数据封装类，用于存储客户端订阅的 groupKey 和其对应的 MD5 值
     private Map<String, String> lisentersGroupkeyStatus;
-    
+
     public Map<String, String> getLisentersGroupkeyStatus() {
         return lisentersGroupkeyStatus;
     }
-    
+
     public void setLisentersGroupkeyStatus(Map<String, String> lisentersGroupkeyStatus) {
         this.lisentersGroupkeyStatus = lisentersGroupkeyStatus;
     }
-    
+
 }

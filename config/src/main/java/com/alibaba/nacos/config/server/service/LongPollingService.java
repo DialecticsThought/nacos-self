@@ -85,17 +85,37 @@ public class LongPollingService {
     }
 
     public SampleResult getSubscribleInfoByIp(String clientIp) {
+        /**
+         * 作用: 创建一个 SampleResult 对象，用于保存该 IP 地址下的长轮询订阅者的配置信息。
+         * 解释: SampleResult 是一个简单的数据封装类，用于存储客户端订阅的 groupKey 和其对应的 MD5 值。
+         */
         SampleResult sampleResult = new SampleResult();
+        /**
+         * 作用: 初始化一个空的 Map，用于存储来自该 IP 地址的所有订阅者的 groupKey 和其对应的 MD5 值。
+         * 解释: groupKey 是用于唯一标识客户端订阅配置的键，MD5 值用于检查客户端持有的配置版本是否与服务器上的一致。
+         */
         Map<String, String> lisentersGroupkeyStatus = new HashMap<>(50);
-
+        /**
+         * 作用: 遍历所有长轮询订阅者 (allSubs)，检查客户端的 ip 是否与传入的 clientIp 匹配。
+         * 解释: 通过过滤匹配的客户端，确保只收集来自特定 IP 地址的订阅者。
+         */
         for (ClientLongPolling clientLongPolling : allSubs) {
             if (clientLongPolling.ip.equals(clientIp)) {
                 // One ip can have multiple listener.
+                /**
+                 *
+                 * 如果 lisentersGroupkeyStatus 与当前客户端的 clientMd5Map 不相同，
+                 * 则将 clientMd5Map 中的所有 groupKey 和 MD5 值加入到 lisentersGroupkeyStatus 中
+                 *
+                 * clientMd5Map 是每个长轮询客户端保存的其订阅的配置及其 MD5 值。
+                 * 通过将这些数据添加到 lisentersGroupkeyStatus 中，可以将该 IP 下的所有订阅者的配置信息合并
+                 */
                 if (!lisentersGroupkeyStatus.equals(clientLongPolling.clientMd5Map)) {
                     lisentersGroupkeyStatus.putAll(clientLongPolling.clientMd5Map);
                 }
             }
         }
+        // 作用: 将 lisentersGroupkeyStatus 设置到 SampleResult 对象中，表示该 IP 地址下的所有长轮询订阅者的订阅信息已经收集完毕。
         sampleResult.setLisentersGroupkeyStatus(lisentersGroupkeyStatus);
         return sampleResult;
     }
@@ -140,16 +160,39 @@ public class LongPollingService {
     }
 
     public SampleResult getCollectSubscribleInfoByIp(String ip) {
+        /**
+         * 作用: 初始化 SampleResult 对象，并为其设置一个空的 Map，用于存储最终汇总的订阅信息。
+         * 解释: 与 getSubscribleInfoByIp() 方法类似，sampleResult 将保存该 IP 地址下所有订阅者的 groupKey 和其对应的 MD5 值。
+         */
         SampleResult sampleResult = new SampleResult();
         sampleResult.setLisentersGroupkeyStatus(new HashMap<String, String>(50));
+        /**
+         * 作用: 设置一个循环，执行 SAMPLE_TIMES 次采样。SAMPLE_TIMES 的值为 3（在类中定义），意味着系统将执行 3 次采样操作。
+         * 解释: 这种多次采样可以确保数据的准确性，避免瞬时的状态导致遗漏一些订阅者信息。
+         */
         for (int i = 0; i < SAMPLE_TIMES; i++) {
+            /**
+             * 作用: 调用 getSubscribleInfoByIp(ip) 方法获取该 IP 地址下的长轮询订阅者的配置信息。
+             * 解释: 每次采样都会重新获取当前 IP 地址的订阅者信息。
+             */
             SampleResult sampleTmp = getSubscribleInfoByIp(ip);
+            /**
+             * 作用: 如果当前采样结果不为空，则将该采样结果的订阅信息合并到最终的 sampleResult 中。
+             * 第一个条件 (sampleTmp.getLisentersGroupkeyStatus() != null)：确保采样结果不为空。
+             * 第二个条件：确保当前采样结果与已收集的信息不同，如果不同，则合并采样结果。
+             * 解释: 通过多次采样并合并结果，确保最终的 sampleResult 包含完整的订阅信息。
+             */
             if (sampleTmp != null) {
                 if (sampleTmp.getLisentersGroupkeyStatus() != null && !sampleResult.getLisentersGroupkeyStatus()
                         .equals(sampleTmp.getLisentersGroupkeyStatus())) {
                     sampleResult.getLisentersGroupkeyStatus().putAll(sampleTmp.getLisentersGroupkeyStatus());
                 }
             }
+            /**
+             * 作用: 在每次采样之后，系统会等待 SAMPLE_PERIOD 毫秒（设置为 100 毫秒）再进行下一次采样。
+             * Thread.sleep(SAMPLE_PERIOD)：暂停当前线程一段时间（即 100 毫秒）。
+             * 解释: 通过间隔一定时间的多次采样，避免数据瞬时变化的影响，同时给系统留出一定的缓冲时间
+             */
             if (i < SAMPLE_TIMES - 1) {
                 try {
                     Thread.sleep(SAMPLE_PERIOD);
@@ -163,26 +206,33 @@ public class LongPollingService {
 
     /**
      * Add LongPollingClient.
+     * 它的主要功能是添加一个长轮询客户端并处理相关的逻辑。
+     * 长轮询是服务器与客户端保持一个长时间的 HTTP 连接，直到服务器有新数据或者超时，再返回给客户端
      *
-     * @param req              HttpServletRequest.
-     * @param rsp              HttpServletResponse.
-     * @param clientMd5Map     clientMd5Map.
-     * @param probeRequestSize probeRequestSize.
+     * @param req              HttpServletRequest. HTTP 请求对象，包含了客户端的请求信息和头部参数。
+     * @param rsp              HttpServletResponse. HTTP 响应对象，用于返回给客户端数据。
+     * @param clientMd5Map     clientMd5Map. 客户端提交的配置数据的 MD5 值集合，键是 dataId、group 和 tenant 生成的 groupKey，值是 MD5。
+     * @param probeRequestSize probeRequestSize. 客户端请求的配置项数量，用于记录客户端请求包含的 MD5 键值对的数量
      */
     public void addLongPollingClient(HttpServletRequest req, HttpServletResponse rsp, Map<String, String> clientMd5Map,
                                      int probeRequestSize) {
-
+        // 读取请求头 Long-Pulling-Timeout-No-Hangup 的值，用于判断客户端是否支持不挂起长轮询。
+        // 如果客户端设置了这个头部，并且值为 "true"，那么服务器在收到这个请求后不会保持连接
         String noHangUpFlag = req.getHeader(LongPollingService.LONG_POLLING_NO_HANG_UP_HEADER);
-
+        // 通过 MD5Util.compareMd5() 检查客户端提交的 MD5 是否和服务器端保存的配置项的 MD5 相同。
+        // 如果不同，意味着配置项有变化，服务器应该立即返回这些变化给客户端
         long start = System.currentTimeMillis();
         List<String> changedGroups = MD5Util.compareMd5(req, rsp, clientMd5Map);
+        //如果服务器检测到配置有变化，调用 generateResponse() 方法立即返回变化的配置给客户端，同时记录日志。
         if (changedGroups.size() > 0) {
             generateResponse(req, rsp, changedGroups);
+            // 记录即时返回的日志
             LogUtil.CLIENT_LOG.info("{}|{}|{}|{}|{}|{}|{}", System.currentTimeMillis() - start, "instant",
                     RequestUtil.getRemoteIp(req), "polling", clientMd5Map.size(), probeRequestSize,
                     changedGroups.size());
             return;
         } else if (noHangUpFlag != null && noHangUpFlag.equalsIgnoreCase(TRUE_STR)) {
+            // 如果客户端的请求头中包含 no-hangup 标志，表示客户端不希望服务器保持长时间的连接，服务器直接返回日志而不挂起连接
             LogUtil.CLIENT_LOG.info("{}|{}|{}|{}|{}|{}|{}", System.currentTimeMillis() - start, "nohangup",
                     RequestUtil.getRemoteIp(req), "polling", clientMd5Map.size(), probeRequestSize,
                     changedGroups.size());
@@ -190,35 +240,108 @@ public class LongPollingService {
         }
 
         // Must be called by http thread, or send response.
+        // 果没有检测到配置变化，且客户端未设置 no-hangup，服务器会启动异步处理。
+        // AsyncContext 允许服务器挂起该请求，而不占用线程资源。此时，线程会被释放，等待有新数据或超时后再处理
         final AsyncContext asyncContext = req.startAsync();
+
+
         // AsyncContext.setTimeout() is incorrect, Control by oneself
+        // 将超时时间设置为 0 表示不使用容器的超时控制，超时控制将由业务逻辑自己管理
         asyncContext.setTimeout(0L);
+        /**
+         * 作用: 通过 RequestUtil.getRemoteIp() 方法从 HttpServletRequest 中提取客户端的 IP 地址。
+         * 解释: 每个客户端请求都会携带 IP 地址，服务器使用该 IP 来进行连接限制、日志记录等操作
+         */
         String ip = RequestUtil.getRemoteIp(req);
         ConnectionCheckResponse connectionCheckResponse = checkLimit(req);
         if (!connectionCheckResponse.isSuccess()) {
+            /**
+             * 使用 RpcScheduledExecutor.CONTROL_SCHEDULER 调度一个异步任务，1 到 3 秒后向客户端返回 503 Service Unavailable 响应。
+             *
+             * generate503Response(): 用于生成 503 响应，告诉客户端服务器当前无法处理请求。
+             * asyncContext: 表示异步处理的上下文，它允许在异步处理中延迟返回响应。
+             * rsp: HttpServletResponse 对象，用于发送 HTTP 响应。
+             * connectionCheckResponse.getMessage(): 包含连接检查失败的详细信息，将会包含在返回的 503 错误响应中。
+             */
             RpcScheduledExecutor.CONTROL_SCHEDULER.schedule(
                     () -> generate503Response(asyncContext, rsp, connectionCheckResponse.getMessage()),
                     1000L + new Random().nextInt(2000), TimeUnit.MILLISECONDS);
+            /**
+             * 作用: 终止方法的执行。由于连接检查失败，服务器不再继续处理请求，直接返回。
+             * 解释: return 结束了 addLongPollingClient 方法的进一步执行，表示已经向客户端发送了错误响应。
+             */
             return;
         }
-
+        /**
+         * 作用: 从请求头中提取客户端的应用名称。
+         * 解释: appName 是客户端应用的标识，用于记录和跟踪请求的来源。RequestUtil.CLIENT_APPNAME_HEADER 表示客户端发送的请求头名称。
+         * 例子: 如果请求头 Client-AppName 为 "myApp"，则 appName 变量将被赋值为 "myApp"。
+         */
         String appName = req.getHeader(RequestUtil.CLIENT_APPNAME_HEADER);
+        /**
+         * 作用: 从请求头中提取配置的标签值。
+         * 解释: tag 用于区分不同版本或环境的配置（如 beta、release 等），可以让服务器根据标签返回特定版本的配置。
+         * 例子: 如果客户端的请求头 Vipserver-Tag 为 "release"，则 tag 变量会保存 "release"
+         */
         String tag = req.getHeader("Vipserver-Tag");
+        /**
+         * 解释: delayTime 是为了负载均衡或其他策略所增加的延迟时间，通常用于防止客户端超时。服务器在响应客户端之前会延迟一小段时间。
+         * 例子: 如果 FIXED_DELAY_TIME 配置为 300，则 delayTime 为 300；如果没有配置该参数，则使用默认值 500。
+         * java
+         */
         int delayTime = SwitchService.getSwitchInteger(SwitchService.FIXED_DELAY_TIME, 500);
+        /**
+         * 作用: 获取 MIN_LONG_POOLING_TIMEOUT 的配置值，表示服务器允许的最小长轮询超时时间，如果该值不存在，则默认设置为 10000 毫秒（10 秒）。
+         * 解释: minLongPoolingTimeout 确保客户端的长轮询请求有一个最低的等待时间，防止客户端设置过低的超时时间，造成频繁请求服务器。
+         */
         int minLongPoolingTimeout = SwitchService.getSwitchInteger("MIN_LONG_POOLING_TIMEOUT", 10000);
 
         // Add delay time for LoadBalance, and one response is returned 500 ms in advance to avoid client timeout.
+
+        // 作用: 从客户端请求头中读取 Long-Pulling-Timeout，这是客户端希望长轮询保持的最大等待时间。
         String requestLongPollingTimeOut = req.getHeader(LongPollingService.LONG_POLLING_HEADER);
+        // 计算服务器设置的实际长轮询超时时间。timeout 的值是客户端请求的超时时间减去延迟时间 delayTime 和最小超时时间 minLongPoolingTimeout 中的最大值
         long timeout = Math.max(minLongPoolingTimeout, Long.parseLong(requestLongPollingTimeOut) - delayTime);
+        // 启动一个新的 ClientLongPolling 任务，负责长轮询处理。
+        // 这个任务会异步执行，并在服务器检测到配置有变化时，或者超时时返回响应给客户端。
+        /**
+         * 参数解释:
+         * AsyncContext asyncContext: 异步上下文，包含了客户端请求的处理上下文。
+         * Map<String, String> clientMd5Map: 客户端提交的 MD5 值集合。
+         * String ip: 客户端 IP 地址。
+         * int probeRequestSize: 客户端请求的配置项数量。
+         * long timeout: 长轮询的超时时间。
+         * String appName: 客户端的应用名称。
+         * String tag: 配置的标签（如果有）
+         */
         ConfigExecutor.executeLongPolling(
                 new ClientLongPolling(asyncContext, clientMd5Map, ip, probeRequestSize, timeout, appName, tag));
     }
 
     private ConnectionCheckResponse checkLimit(HttpServletRequest httpServletRequest) {
+        /**
+         * 作用: 从 HttpServletRequest 中提取客户端的 IP 地址。
+         * 解释: RequestUtil.getRemoteIp() 是一个工具方法，用于获取客户端的 IP。
+         * 服务器会使用这个 IP 来检查该客户端的连接是否合法或是否超出了限制。
+         * 例子: 如果客户端 IP 是 192.168.1.100，那么 ip 变量就会存储这个 IP 地址。
+         */
         String ip = RequestUtil.getRemoteIp(httpServletRequest);
+        /**
+         * 作用: 从请求头中提取客户端的应用名称。
+         * 解释: appName 是客户端的应用标识，用于区分不同的应用程序。服务器会根据这个字段来判断是否对某个应用有特殊的连接限制
+         */
         String appName = httpServletRequest.getHeader(RequestUtil.CLIENT_APPNAME_HEADER);
+        /**
+         * 作用: 该类用于封装客户端发起的连接检查请求。它主要包含以下几个字段：
+         * clientIp: 客户端的 IP 地址，用于识别请求来源。
+         * appName: 客户端的应用名称，用于对不同的应用进行连接限制管理。
+         * source: 连接的来源（如 "LongPolling"），用于区分不同类型的请求。
+         * labels: 额外的标签信息，可能用于细粒度的连接控制。
+         */
         ConnectionCheckRequest connectionCheckRequest = new ConnectionCheckRequest(ip, appName, "LongPolling");
         ConnectionCheckResponse checkResponse = ControlManagerCenter.getInstance().getConnectionControlManager()
+                // TODO 查看 com.alibaba.nacos.plugin.control.impl.NacosConnectionControlManager.check
+                // TODO 查看 com.alibaba.nacos.config.server.service.LongPollingConnectionMetricsCollector
                 .check(connectionCheckRequest);
         return checkResponse;
     }
@@ -229,20 +352,25 @@ public class LongPollingService {
 
     @SuppressWarnings("PMD.ThreadPoolCreationRule")
     public LongPollingService() {
+        //订阅列表
         allSubs = new ConcurrentLinkedQueue<>();
-
+        //长轮训任务  10 秒执行一次 长轮训监控使用的
         ConfigExecutor.scheduleLongPolling(new StatTask(), 0L, 10L, TimeUnit.SECONDS);
 
         // Register LocalDataChangeEvent to NotifyCenter.
+        //注册一个 LocalDataChangeEvent 事件
         NotifyCenter.registerToPublisher(LocalDataChangeEvent.class, NotifyCenter.ringBufferSize);
 
         // Register A Subscriber to subscribe LocalDataChangeEvent.
+        //注册订阅者来订阅 LocalDataChangeEvent 事件
         NotifyCenter.registerSubscriber(new Subscriber() {
 
             @Override
             public void onEvent(Event event) {
-                if (event instanceof LocalDataChangeEvent) {
+                if (event instanceof LocalDataChangeEvent) { //事件类型判断
+                    //是 LocalDataChangeEvent 类型事件 强转为 LocalDataChangeEvent 事件
                     LocalDataChangeEvent evt = (LocalDataChangeEvent) event;
+                    //异步执行任务 重点关注 DataChangeTask
                     ConfigExecutor.executeLongPolling(new DataChangeTask(evt.groupKey, evt.isBeta, evt.betaIps));
                 }
 
