@@ -170,7 +170,7 @@ public class LongPollingService {
      * @param probeRequestSize probeRequestSize.
      */
     public void addLongPollingClient(HttpServletRequest req, HttpServletResponse rsp, Map<String, String> clientMd5Map,
-            int probeRequestSize) {
+                                     int probeRequestSize) {
 
         String noHangUpFlag = req.getHeader(LongPollingService.LONG_POLLING_NO_HANG_UP_HEADER);
 
@@ -349,64 +349,110 @@ public class LongPollingService {
         }
     }
 
+    /**
+     * ClientLongPolling 类 实现了 Nacos 的长轮询机制，允许客户端通过异步方式持续监听配置变更。
+     * 长轮询流程: 客户端发起长轮询请求 -> 服务器保持连接 -> 配置变更或超时时，服务器通知客户端并关闭连接。
+     * 主要功能: 管理长轮询的超时任务、处理配置变更的通知、生成 HTTP 响应、取消超时任务等。
+     */
     public class ClientLongPolling implements Runnable {
 
         @Override
         public void run() {
+            // 作用: 通过 ConfigExecutor 安排一个长轮询超时任务。如果客户端在长轮询超时时间内没有收到配置变更通知，这个任务会执行超时逻辑。
             asyncTimeoutFuture = ConfigExecutor.scheduleLongPolling(() -> {
                 try {
+                    // 将客户端的 IP 和当前时间戳记录到 retainIps 中，用于跟踪客户端连接的活动状态。
                     getRetainIps().put(ClientLongPolling.this.ip, System.currentTimeMillis());
 
                     // Delete subscriber's relations.
+                    // 从订阅者列表中移除当前客户端的长轮询任务，因为它已经超时或收到通知。
                     boolean removeFlag = allSubs.remove(ClientLongPolling.this);
 
-                    if (removeFlag) {
-
+                    if (removeFlag) {// 判断是否成功移除了订阅者关系，如果成功则继续处理
+                        // 记录长轮询超时事件的日志信息，包括持续时间、客户端 IP、订阅的配置数量等
                         LogUtil.CLIENT_LOG.info("{}|{}|{}|{}|{}|{}", (System.currentTimeMillis() - createTime),
                                 "timeout", RequestUtil.getRemoteIp((HttpServletRequest) asyncContext.getRequest()),
                                 "polling", clientMd5Map.size(), probeRequestSize);
+                        //  调用 sendResponse 方法，通知客户端配置没有变化，并结束长轮询请求。
                         sendResponse(null);
 
-                    } else {
+                    } else {// 如果订阅者关系删除失败，记录警告日志，提示问题
                         LogUtil.DEFAULT_LOG.warn("client subsciber's relations delete fail.");
                     }
                 } catch (Throwable t) {
+                    // 捕获任何异常并记录错误日志，防止任务崩溃
                     LogUtil.DEFAULT_LOG.error("long polling error:" + t.getMessage(), t.getCause());
                 }
 
-            }, timeoutTime, TimeUnit.MILLISECONDS);
-
+            }, timeoutTime, TimeUnit.MILLISECONDS);// 设置长轮询的超时时间，单位为毫秒。一旦超时，则执行上面的超时逻辑
+            // 将当前客户端的长轮询任务添加到订阅者列表 allSubs 中，表示该客户端正在等待配置变更通知
             allSubs.add(this);
         }
 
+        /**
+         * 向客户端发送响应，通知配置的变化或超时
+         *
+         * @param changedGroups
+         */
         void sendResponse(List<String> changedGroups) {
 
             // Cancel time out task.
-            if (null != asyncTimeoutFuture) {
+            if (null != asyncTimeoutFuture) {// 如果超时任务尚未执行，取消该任务，防止它在发送响应后继续执行
                 asyncTimeoutFuture.cancel(false);
             }
+            //调用 generateResponse 方法，生成并发送 HTTP 响应给客户端
             generateResponse(changedGroups);
         }
 
+        /**
+         * 作用: 根据传入的 changedGroups 生成响应，通知客户端哪些配置项发生了变化
+         *
+         * @param changedGroups
+         */
         void generateResponse(List<String> changedGroups) {
-
+            // 如果 changedGroups 为 null，表示没有配置变更，直接完成异步请求并返回
             if (null == changedGroups) {
                 // Tell web container to send http response.
                 asyncContext.complete();
                 return;
             }
-
+            // 获取异步上下文的 HTTP 响应对象，用于向客户端发送数据
             HttpServletResponse response = (HttpServletResponse) asyncContext.getResponse();
 
             try {
+                // 通过 MD5Util.compareMd5ResultString 方法，将变更的配置项生成响应字符串
                 final String respString = MD5Util.compareMd5ResultString(changedGroups);
 
-                // Disable cache.
+                // Disable cache. 服务器希望强制客户端每次请求时都从服务器重新获取数据，而不是从缓存中获取旧的内容
+                // 设置响应头，禁用缓存，并将状态码设置为 200 (OK)
+                /**
+                 * 1. Pragma: no-cache
+                 * 作用: 这是 HTTP/1.0 的头部字段，用于告诉客户端不要缓存响应内容。虽然它是为早期的 HTTP 协议设计的，但为了向后兼容，仍然广泛使用。
+                 * 解释: 这个头意味着客户端在处理响应时不应该将其存储在缓存中，每次请求都应该直接从服务器获取最新的内容。
+                 *
+                 * 2. Expires: 0
+                 * 作用: 这是一个 HTTP 头部，表示资源的过期时间。
+                 * 解释: Expires: 0 意味着该响应在接收后立即过期。客户端收到响应后不会将其缓存，并且下次访问时必须从服务器重新请求数据。
+                 *
+                 * 3. Cache-Control: no-cache, no-store
+                 * no-cache:
+                 * 作用: 告诉客户端，在使用缓存的副本之前，必须向服务器验证响应的有效性。
+                 * 解释: 即使客户端有缓存副本，也必须先向服务器检查响应是否已经过期或更新，不能直接使用缓存。
+                 * no-store:
+                 * 作用: 更为严格，表示客户端和中间代理都不应该存储任何响应的副本（包括内存缓存和硬盘缓存）。
+                 * 解释: 服务器要求客户端和代理服务器完全不要缓存或保存响应内容。
+                 *
+                 * 4. HttpServletResponse.SC_OK
+                 * 作用: 设置 HTTP 状态码为 200 OK，表示请求成功，服务器已经正常处理了请求。
+                 * 解释: 尽管服务器响应成功，它仍然不希望客户端缓存这个结果，因此通过前面几个响应头明确禁止缓存行为。
+                 */
                 response.setHeader("Pragma", "no-cache");
                 response.setDateHeader("Expires", 0);
                 response.setHeader("Cache-Control", "no-cache,no-store");
                 response.setStatus(HttpServletResponse.SC_OK);
+                // 向客户端写入响应内容，通知客户端哪些配置项发生了变化
                 response.getWriter().println(respString);
+                // 完成异步处理，关闭连接，告诉服务器可以向客户端发送响应
                 asyncContext.complete();
             } catch (Exception ex) {
                 PULL_LOG.error(ex.toString(), ex);
@@ -415,7 +461,7 @@ public class LongPollingService {
         }
 
         ClientLongPolling(AsyncContext ac, Map<String, String> clientMd5Map, String ip, int probeRequestSize,
-                long timeoutTime, String appName, String tag) {
+                          long timeoutTime, String appName, String tag) {
             this.asyncContext = ac;
             this.clientMd5Map = clientMd5Map;
             this.probeRequestSize = probeRequestSize;
@@ -426,22 +472,49 @@ public class LongPollingService {
             this.tag = tag;
         }
 
+        /**
+         * 作用: AsyncContext 对象，代表异步处理的上下文，用于处理客户端的异步请求。
+         * 长轮询的核心机制是异步处理，这允许服务器在保持连接的情况下等待配置变更。
+         */
         final AsyncContext asyncContext;
-
+        /**
+         * 作用: 客户端持有的配置项及其对应的 MD5 值，用于和服务器端的配置进行比对，看是否有配置项发生了变化。
+         * 例子: {"dataId1+groupId1": "md5_value_1", "dataId2+groupId2": "md5_value_2"}
+         */
         final Map<String, String> clientMd5Map;
-
+        /**
+         * 作用: 记录客户端请求长轮询的创建时间，用于计算超时和统计相关信息
+         */
         final long createTime;
-
+        /**
+         * 作用: 客户端的 IP 地址，用于记录客户端的连接和判断长轮询的来源。
+         * 例子: "192.168.1.100"
+         */
         final String ip;
-
+        /**
+         * 作用: 客户端的应用名称，用于标识是哪个应用发起的长轮询请求。
+         * 例子: "myApp"
+         */
         final String appName;
-
+        /**
+         * 作用: 配置的标签，用于区分不同环境、版本或场景的配置。客户端通过标签订阅不同的配置。
+         * 例子: "release" 或 "beta"
+         */
         final String tag;
-
+        /**
+         * 作用: 客户端发出的探测请求的大小，表示客户端一次请求中包含多少个配置项的 MD5 值。
+         * 例子: 10，表示客户端正在请求 10 个配置项的状态
+         */
         final int probeRequestSize;
-
+        /**
+         * 作用: 客户端设置的长轮询超时时间，表示长轮询的最长等待时间。
+         * 例子: 30000 毫秒 (30 秒)。
+         */
         final long timeoutTime;
-
+        /**
+         * 作用: 表示一个异步任务的 Future 对象，用于跟踪和管理长轮询任务的超时处理。
+         * 例子: Future<?> future = executor.schedule(...);
+         */
         Future<?> asyncTimeoutFuture;
 
         @Override
