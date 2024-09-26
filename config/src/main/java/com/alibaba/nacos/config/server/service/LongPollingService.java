@@ -533,6 +533,29 @@ public class LongPollingService {
         try {
             final String respString = MD5Util.compareMd5ResultString(changedGroups);
             // Disable cache.
+            // Disable cache. 服务器希望强制客户端每次请求时都从服务器重新获取数据，而不是从缓存中获取旧的内容
+            // 设置响应头，禁用缓存，并将状态码设置为 200 (OK)
+            /**
+             * 1. Pragma: no-cache
+             * 作用: 这是 HTTP/1.0 的头部字段，用于告诉客户端不要缓存响应内容。虽然它是为早期的 HTTP 协议设计的，但为了向后兼容，仍然广泛使用。
+             * 解释: 这个头意味着客户端在处理响应时不应该将其存储在缓存中，每次请求都应该直接从服务器获取最新的内容。
+             *
+             * 2. Expires: 0
+             * 作用: 这是一个 HTTP 头部，表示资源的过期时间。
+             * 解释: Expires: 0 意味着该响应在接收后立即过期。客户端收到响应后不会将其缓存，并且下次访问时必须从服务器重新请求数据。
+             *
+             * 3. Cache-Control: no-cache, no-store
+             * no-cache:
+             * 作用: 告诉客户端，在使用缓存的副本之前，必须向服务器验证响应的有效性。
+             * 解释: 即使客户端有缓存副本，也必须先向服务器检查响应是否已经过期或更新，不能直接使用缓存。
+             * no-store:
+             * 作用: 更为严格，表示客户端和中间代理都不应该存储任何响应的副本（包括内存缓存和硬盘缓存）。
+             * 解释: 服务器要求客户端和代理服务器完全不要缓存或保存响应内容。
+             *
+             * 4. HttpServletResponse.SC_OK
+             * 作用: 设置 HTTP 状态码为 200 OK，表示请求成功，服务器已经正常处理了请求。
+             * 解释: 尽管服务器响应成功，它仍然不希望客户端缓存这个结果，因此通过前面几个响应头明确禁止缓存行为。
+             */
             response.setHeader("Pragma", "no-cache");
             response.setDateHeader("Expires", 0);
             response.setHeader("Cache-Control", "no-cache,no-store");
@@ -548,6 +571,29 @@ public class LongPollingService {
         try {
 
             // Disable cache.
+            // Disable cache. 服务器希望强制客户端每次请求时都从服务器重新获取数据，而不是从缓存中获取旧的内容
+            // 设置响应头，禁用缓存，并将状态码设置为 200 (OK)
+            /**
+             * 1. Pragma: no-cache
+             * 作用: 这是 HTTP/1.0 的头部字段，用于告诉客户端不要缓存响应内容。虽然它是为早期的 HTTP 协议设计的，但为了向后兼容，仍然广泛使用。
+             * 解释: 这个头意味着客户端在处理响应时不应该将其存储在缓存中，每次请求都应该直接从服务器获取最新的内容。
+             *
+             * 2. Expires: 0
+             * 作用: 这是一个 HTTP 头部，表示资源的过期时间。
+             * 解释: Expires: 0 意味着该响应在接收后立即过期。客户端收到响应后不会将其缓存，并且下次访问时必须从服务器重新请求数据。
+             *
+             * 3. Cache-Control: no-cache, no-store
+             * no-cache:
+             * 作用: 告诉客户端，在使用缓存的副本之前，必须向服务器验证响应的有效性。
+             * 解释: 即使客户端有缓存副本，也必须先向服务器检查响应是否已经过期或更新，不能直接使用缓存。
+             * no-store:
+             * 作用: 更为严格，表示客户端和中间代理都不应该存储任何响应的副本（包括内存缓存和硬盘缓存）。
+             * 解释: 服务器要求客户端和代理服务器完全不要缓存或保存响应内容。
+             *
+             * 4. HttpServletResponse.SC_OK
+             * 作用: 设置 HTTP 状态码为 200 OK，表示请求成功，服务器已经正常处理了请求。
+             * 解释: 尽管服务器响应成功，它仍然不希望客户端缓存这个结果，因此通过前面几个响应头明确禁止缓存行为。
+             */
             response.setHeader("Pragma", "no-cache");
             response.setDateHeader("Expires", 0);
             response.setHeader("Cache-Control", "no-cache,no-store");
