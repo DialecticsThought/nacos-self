@@ -232,14 +232,21 @@ public class ConfigController {
             @RequestParam(value = "tag", required = false) String tag)
             throws IOException, ServletException, NacosException {
         // check tenant
+        //校验租户信息
         ParamUtils.checkTenant(tenant);
+        //处理租户参数
         tenant = NamespaceUtil.processNamespaceParameter(tenant);
         // check params
+        //检查入参
         ParamUtils.checkParam(dataId, group, "datumId", "content");
+
+        //检查 tag
         ParamUtils.checkParam(tag);
 
         final String clientIp = RequestUtil.getRemoteIp(request);
         String isNotify = request.getHeader("notify");
+        //获取配置
+        //TODO 进入
         inner.doGetConfig(request, response, dataId, group, tenant, tag, isNotify, clientIp);
     }
 
@@ -363,6 +370,7 @@ public class ConfigController {
         }
 
         // do long-polling
+        //长轮训获取配置的方法 正在实现业务逻辑的方法
         inner.doPollingConfig(request, response, clientMd5Map, probeModify.length());
     }
 

@@ -82,29 +82,37 @@ public class ConfigServletInner {
                                   Map<String, String> clientMd5Map, int probeRequestSize) throws IOException {
 
         // Long polling.
+        //是否长轮训判断 其实就是获取长轮训超时时间
         if (LongPollingService.isSupportLongPolling(request)) {
+            //添加长轮训客户端
             longPollingService.addLongPollingClient(request, response, clientMd5Map, probeRequestSize);
             return HttpServletResponse.SC_OK + "";
         }
 
         // Compatible with short polling logic.
+        //兼容短轮训逻辑
         List<String> changedGroups = MD5Util.compareMd5(request, response, clientMd5Map);
 
         // Compatible with short polling result.
+        //兼容短轮训结果
         String oldResult = MD5Util.compareMd5OldResult(changedGroups);
         String newResult = MD5Util.compareMd5ResultString(changedGroups);
-
+        //获取 客户端版本 为空 则默认 2.0 版本
         String version = request.getHeader(Constants.CLIENT_VERSION_HEADER);
         if (version == null) {
             version = "2.0.0";
         }
+        //解析版本 得到纯数字版本
         int versionNum = Protocol.getVersionNumber(version);
 
         // Before 2.0.4 version, return value is put into header.
+        //不同版本进行不同处理
         if (versionNum < START_LONG_POLLING_VERSION_NUM) {
+            //2.0.4 版本之间结果放入 header
             response.addHeader(Constants.PROBE_MODIFY_RESPONSE, oldResult);
             response.addHeader(Constants.PROBE_MODIFY_RESPONSE_NEW, newResult);
         } else {
+            //2.0.4 及以后版本结果放入 Attribute
             request.setAttribute("content", newResult);
         }
 
