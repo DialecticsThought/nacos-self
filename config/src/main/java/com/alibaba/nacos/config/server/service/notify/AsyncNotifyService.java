@@ -77,6 +77,7 @@ public class AsyncNotifyService {
 
     @Autowired
     public AsyncNotifyService(ServerMemberManager memberManager) {
+        //集群成员
         this.memberManager = memberManager;
 
         // Register ConfigDataChangeEvent to NotifyCenter.
@@ -110,29 +111,34 @@ public class AsyncNotifyService {
      */
     void handleConfigDataChangeEvent(Event event) {
         if (event instanceof ConfigDataChangeEvent) {
+            // 配置数据变化事件 强转
             ConfigDataChangeEvent evt = (ConfigDataChangeEvent) event;
+            //最后一次修改时间
             long dumpTs = evt.lastModifiedTs;
             String dataId = evt.dataId;
             String group = evt.group;
             String tenant = evt.tenant;
             String tag = evt.tag;
             MetricsMonitor.incrementConfigChangeCount(tenant, group, dataId);
-            //  // 获取所有的Nacos服务节点（包括当前客户端）
+            // 获取所有的Nacos服务节点（包括当前客户端）  也就是Nacos 集群成员
             Collection<Member> ipList = memberManager.allMembersWithoutSelf();
 
             // In fact, any type of queue here can be
             // 创建一个队列，将相关配置的其他服务节点都存放进来
             Queue<NotifySingleRpcTask> rpcQueue = new LinkedList<>();
-
+            //遍历集群成员
             for (Member member : ipList) {
                 // grpc report data change only
+                // NotifySingleTask 任务加入到队列
                 rpcQueue.add(
                         new NotifySingleRpcTask(dataId, group, tenant, tag, dumpTs, evt.isBeta, evt.isBatch, member));
             }
             if (!rpcQueue.isEmpty()) {
                 // 通过线程池执行异步通知
                 // AsyncRpcTask实现了runnable接口，关注其run方法
-                // TODO 查看 AsyncRpcTask
+                // TODO 查看 AsyncRpcTask#run
+
+
                 // 只要队列不为空，就会从队列中取出NotifySingleRpcTask任务来执行
                 // 然后构造配置变动集群同步的请求对象，包括namespaceId、dataId、groupId、标签等，然后通知目标节点
                 ConfigExecutor.executeAsyncNotify(new AsyncRpcTask(rpcQueue));
@@ -174,6 +180,7 @@ public class AsyncNotifyService {
                     // get delay time and set fail count to the task
                     // 异步任务执行
                     // 可延迟的处理，因为是不健康的节点，不知道什么时候能恢复
+                    // TODO 进入
                     asyncTaskExecute(task);
                 } else {
 
@@ -304,10 +311,15 @@ public class AsyncNotifyService {
     }
 
     private void asyncTaskExecute(NotifySingleRpcTask task) {
+        // 得到延迟时间
         int delay = getDelayTime(task);
+        // 创建一个任务队列
         Queue<NotifySingleRpcTask> queue = new LinkedList<>();
+        // 把这个任务放入队列
         queue.add(task);
+        // 包装成AsyncRpcTask
         AsyncRpcTask asyncTask = new AsyncRpcTask(queue);
+        // 延迟 以TimeUnit.MILLISECONDS为单位的delay时间 执行 asyncTask
         ConfigExecutor.scheduleAsyncNotify(asyncTask, delay, TimeUnit.MILLISECONDS);
     }
 

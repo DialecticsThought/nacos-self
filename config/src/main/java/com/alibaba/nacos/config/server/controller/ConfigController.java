@@ -146,7 +146,9 @@ public class ConfigController {
      * {@link com.alibaba.nacos.config.server.aspect.CapacityManagementAspect} and
      * {@link com.alibaba.nacos.config.server.aspect.RequestLogAspect}.
      * </p>
-     *
+     * TODO
+     *    还要看 ConfigChangePublisher#notifyConfigChange
+     *    因为数据发生变化会有ConfigDataChangeEvent
      * @throws NacosException NacosException.
      */
     @PostMapping

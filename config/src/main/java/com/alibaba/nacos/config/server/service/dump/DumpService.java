@@ -373,16 +373,20 @@ public abstract class DumpService {
      * @param dumpRequest dumpRequest.
      */
     public void dump(DumpRequest dumpRequest) {
-        if (dumpRequest.isBeta()) {
+        if (dumpRequest.isBeta()) {// 处理 Beta 配置的转储，将 Beta 配置同步到需要的节点或存储中
+            // 用于灰度发布、测试等场景，允许特定用户或节点使用新的配置，而不影响其他用户
             dumpBeta(dumpRequest.getDataId(), dumpRequest.getGroup(), dumpRequest.getTenant(),
                     dumpRequest.getLastModifiedTs(), dumpRequest.getSourceIp());
-        } else if (dumpRequest.isBatch()) {
+        } else if (dumpRequest.isBatch()) {// 处理批量配置的转储，一次性处理多个配置项，提升效率
+            // 用于同时更新或发布一组配置，提高运维效率
             dumpBatch(dumpRequest.getDataId(), dumpRequest.getGroup(), dumpRequest.getTenant(),
                     dumpRequest.getLastModifiedTs(), dumpRequest.getSourceIp());
-        } else if (StringUtils.isNotBlank(dumpRequest.getTag())) {
+        } else if (StringUtils.isNotBlank(dumpRequest.getTag())) {// 处理带有特定标签的配置的转储，支持按标签分类的配置管理
+            // 通过标签对配置进行分类，如按地域、版本、业务线等
             dumpTag(dumpRequest.getDataId(), dumpRequest.getGroup(), dumpRequest.getTenant(), dumpRequest.getTag(),
                     dumpRequest.getLastModifiedTs(), dumpRequest.getSourceIp());
-        } else {
+        } else {// 处理正式配置的转储，按照标准流程同步配置
+            // 默认的配置类型，适用于大多数生产环境
             dumpFormal(dumpRequest.getDataId(), dumpRequest.getGroup(), dumpRequest.getTenant(),
                     dumpRequest.getLastModifiedTs(), dumpRequest.getSourceIp());
         }
@@ -391,14 +395,16 @@ public abstract class DumpService {
     /**
      * dump formal config.
      *
-     * @param dataId       dataId.
-     * @param group        group.
-     * @param tenant       tenant.
-     * @param lastModified lastModified.
-     * @param handleIp     handleIp.
+     * @param dataId       dataId.  配置项的 dataId，用于标识具体的配置信息
+     * @param group        group.  配置项所属的组
+     * @param tenant       tenant.  租户 ID，用于多租户场景下的配置隔离
+     * @param lastModified lastModified.   配置信息的最后修改时间，用于数据同步时判断是否需要更新
+     * @param handleIp     handleIp.    处理该任务的 IP 地址
      */
     private void dumpFormal(String dataId, String group, String tenant, long lastModified, String handleIp) {
+        // 将 dataId、group 和 tenant 组合生成一个唯一的 groupKey
         String groupKey = GroupKey2.getKey(dataId, group, tenant);
+        // 任务的 taskKey 直接设置为 groupKey，意味着该任务是与具体的配置项绑定的，使用 groupKey 作为任务标识
         String taskKey = groupKey;
         // 将DumpTask添加到TaskManager任务管理器，它将异步执行
         dumpTaskMgr.addTask(taskKey, new DumpTask(groupKey, false, false, false, null, lastModified, handleIp));
@@ -416,8 +422,11 @@ public abstract class DumpService {
      * @param handleIp     handleIp.
      */
     private void dumpBeta(String dataId, String group, String tenant, long lastModified, String handleIp) {
+        // 将 dataId、group 和 tenant 组合生成一个唯一的 groupKey
         String groupKey = GroupKey2.getKey(dataId, group, tenant);
+        // 任务的 taskKey 直接设置为 groupKey，意味着该任务是与具体的配置项绑定的，使用 groupKey 作为任务标识 + "+beta"
         String taskKey = groupKey + "+beta";
+        // 将DumpTask添加到TaskManager任务管理器，它将异步执行
         dumpTaskMgr.addTask(taskKey, new DumpTask(groupKey, true, false, false, null, lastModified, handleIp));
         DUMP_LOG.info("[dump] add beta task. groupKey={}", groupKey);
 
@@ -433,8 +442,11 @@ public abstract class DumpService {
      * @param handleIp     handleIp.
      */
     private void dumpBatch(String dataId, String group, String tenant, long lastModified, String handleIp) {
+        // 将 dataId、group 和 tenant 组合生成一个唯一的 groupKey
         String groupKey = GroupKey2.getKey(dataId, group, tenant);
+        // 任务的 taskKey 直接设置为 groupKey，意味着该任务是与具体的配置项绑定的，使用 groupKey 作为任务标识 + "+batch"
         String taskKey = groupKey + "+batch";
+        // 将DumpTask添加到TaskManager任务管理器，它将异步执行
         dumpTaskMgr.addTask(taskKey, new DumpTask(groupKey, false, true, false, null, lastModified, handleIp));
         DUMP_LOG.info("[dump] add batch task. groupKey={}", dataId + "+" + group);
     }
@@ -450,8 +462,11 @@ public abstract class DumpService {
      * @param handleIp     handleIp.
      */
     private void dumpTag(String dataId, String group, String tenant, String tag, long lastModified, String handleIp) {
+        // 将 dataId、group 和 tenant 组合生成一个唯一的 groupKey
         String groupKey = GroupKey2.getKey(dataId, group, tenant);
+        // 任务的 taskKey 直接设置为 groupKey，意味着该任务是与具体的配置项绑定的，使用 groupKey 作为任务标识 + "+tag+" + tag
         String taskKey = groupKey + "+tag+" + tag;
+        // 将DumpTask添加到TaskManager任务管理器，它将异步执行
         dumpTaskMgr.addTask(taskKey, new DumpTask(groupKey, false, false, true, tag, lastModified, handleIp));
         DUMP_LOG.info("[dump] add tag task. groupKey={},tag={}", groupKey, tag);
 

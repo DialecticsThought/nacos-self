@@ -60,7 +60,7 @@ public class NacosDelayTaskExecuteEngine extends AbstractNacosTaskExecuteEngine<
         super(logger);
         // 初始化任务队列
         tasks = new ConcurrentHashMap<>(initCapacity);
-        // 创建定时任务的线程池
+        // 创建定时任务的线程池  （单线程的线程池）
         processingExecutor = ExecutorFactory.newSingleScheduledExecutorService(new NameThreadFactory(name));
         // 在指定的初始延迟时间(100毫秒)后开始执行任务，并按固定的时间间隔周期性(100毫秒)地执行任务。
         // 默认延时100毫秒执行ProcessRunnable，然后每隔100毫秒周期性执行ProcessRunnable
@@ -93,6 +93,7 @@ public class NacosDelayTaskExecuteEngine extends AbstractNacosTaskExecuteEngine<
     public AbstractDelayTask removeTask(Object key) {
         lock.lock();
         try {
+            // 根据key得到任务
             AbstractDelayTask task = tasks.get(key);
             if (null != task && task.shouldProcess()) {
                 return tasks.remove(key);
@@ -109,6 +110,7 @@ public class NacosDelayTaskExecuteEngine extends AbstractNacosTaskExecuteEngine<
         Collection<Object> keys = new HashSet<>();
         lock.lock();
         try {
+            // 把任务这个map的所有key拿到
             keys.addAll(tasks.keySet());
         } finally {
             lock.unlock();
@@ -145,9 +147,15 @@ public class NacosDelayTaskExecuteEngine extends AbstractNacosTaskExecuteEngine<
      * process tasks in execute engine.
      */
     protected void processTasks() {
+        // 得到所有任务的key
+        // TODO 进入
         Collection<Object> keys = getAllTaskKeys();
+        // 遍历所有任务的key
         for (Object taskKey : keys) {
-            // 从队列中移除这个任务
+            // TODO 进入
+            // 该方法的核心:   AbstractDelayTask task = tasks.get(key);
+            // 1.得到任务
+            // 2.从队列中移除这个任务
             AbstractDelayTask task = removeTask(taskKey);
             if (null == task) {
                 continue;
@@ -155,6 +163,7 @@ public class NacosDelayTaskExecuteEngine extends AbstractNacosTaskExecuteEngine<
             // taskKey示例值: Service{namespace='public', group='DEFAULT_GROUP', name='discovery-provider', ephemeral=true, revision=0}
             // 找到处理类
             // TODO 查看Processor 是子类PushDelayTaskExecuteEngine的内部类 PushDelayTaskProcessor
+            // 如果是dump的任务 那么 就是DumpProcessor
             NacosTaskProcessor processor = getProcessor(taskKey);
             try {
                 // ReAdd task if process failed

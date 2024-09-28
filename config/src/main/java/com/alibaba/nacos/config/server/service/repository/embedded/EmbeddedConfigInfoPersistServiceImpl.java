@@ -258,6 +258,7 @@ public class EmbeddedConfigInfoPersistServiceImpl implements ConfigInfoPersistSe
             // 如果 configAdvanceInfo 不为 null，从中获取 config_tags 字段（即标签信息），否则标签为空
             String configTags = configAdvanceInfo == null ? null : (String) configAdvanceInfo.get("config_tags");
             // 将标签与配置信息建立关系，这将配置信息和标签存入相关的数据库表中
+            // TODO 进入
             addConfigTagsRelation(configId, configTags, configInfo.getDataId(), configInfo.getGroup(),
                     configInfo.getTenant());
 
@@ -267,6 +268,7 @@ public class EmbeddedConfigInfoPersistServiceImpl implements ConfigInfoPersistSe
             // 触发配置修改的上下文事件，通知系统配置信息已经被修改并需要同步或更新
             EmbeddedStorageContextUtils.onModifyConfigInfo(configInfo, srcIp, now);
             // 使用 databaseOperate.blockUpdate 以异步方式执行数据库操作，consumer 用于处理 SQL 操作的回调函数
+            // TODO 进入
             databaseOperate.blockUpdate(consumer);
             // 调用 getConfigInfoOperateResult 方法返回一个 ConfigOperateResult 对象，包含配置信息的操作结果
             return getConfigInfoOperateResult(configInfo.getDataId(), configInfo.getGroup(), tenantTmp);
@@ -602,41 +604,49 @@ public class EmbeddedConfigInfoPersistServiceImpl implements ConfigInfoPersistSe
     public ConfigOperateResult updateConfigInfo(final ConfigInfo configInfo, final String srcIp, final String srcUser,
                                                 final Map<String, Object> configAdvanceInfo) {
         try {
+            // 调用 findConfigInfo 方法，根据 dataId、group 和 tenant 查找当前存储的配置信息。返回值 oldConfigInfo 是数据库中已有的配置
             ConfigInfo oldConfigInfo = findConfigInfo(configInfo.getDataId(), configInfo.getGroup(),
                     configInfo.getTenant());
 
+            //检查新配置信息的 tenant 字段是否为空，如果为空则设置为空字符串。
             final String tenantTmp =
                     StringUtils.isBlank(configInfo.getTenant()) ? StringUtils.EMPTY : configInfo.getTenant();
-
+            // 然后将该租户信息设置到旧的配置信息对象 oldConfigInfo 中
             oldConfigInfo.setTenant(tenantTmp);
 
+            // 检查新配置信息的 appName 是否为 null，如果是，则使用旧配置信息中的 appName。这确保在没有提供新 appName 时，保留数据库中的原值
             String appNameTmp = oldConfigInfo.getAppName();
             // If the appName passed by the user is not empty, the appName of the user is persisted;
             // otherwise, the appName of db is used. Empty string is required to clear appName
             if (configInfo.getAppName() == null) {
                 configInfo.setAppName(appNameTmp);
             }
-
+            // 调用 updateConfigInfoAtomic 方法执行配置信息的原子更新操作。该方法将生成并执行更新 SQL
             updateConfigInfoAtomic(configInfo, srcIp, srcUser, configAdvanceInfo);
 
             String configTags = configAdvanceInfo == null ? null : (String) configAdvanceInfo.get("config_tags");
             if (configTags != null) {
                 // Delete all tags and recreate them
+                // 先调用 removeTagByIdAtomic 方法删除旧的所有标签
                 removeTagByIdAtomic(oldConfigInfo.getId());
+                // 然后调用 addConfigTagsRelation 方法重新添加新的标签，并与配置关联
                 addConfigTagsRelation(oldConfigInfo.getId(), configTags, configInfo.getDataId(), configInfo.getGroup(),
                         configInfo.getTenant());
             }
-
+            // 调用 historyConfigInfoPersistService.insertConfigHistoryAtomic 方法，
+            // 将旧的配置信息作为历史记录插入数据库。标记为 "U"（表示更新操作）
             Timestamp time = new Timestamp(System.currentTimeMillis());
-
             historyConfigInfoPersistService.insertConfigHistoryAtomic(oldConfigInfo.getId(), oldConfigInfo, srcIp,
                     srcUser, time, "U");
-
+            // 调用 EmbeddedStorageContextUtils.onModifyConfigInfo 方法，触发配置信息修改事件，确保相关的服务或组件能同步到新的配置信息
             EmbeddedStorageContextUtils.onModifyConfigInfo(configInfo, srcIp, time);
+            // 调用 databaseOperate.blockUpdate 方法执行阻塞更新操作，确保所有的数据库操作（如配置信息更新、标签更新等）在事务内完成
             databaseOperate.blockUpdate();
+            // 调用 getConfigInfoOperateResult 方法，生成并返回一个 ConfigOperateResult 对象，表示配置信息更新操作的结果
             return getConfigInfoOperateResult(configInfo.getDataId(), configInfo.getGroup(), tenantTmp);
 
         } finally {
+            // 清理上下文，防止后续操作受到未清理数据的影响
             EmbeddedStorageContextHolder.cleanAllContext();
         }
     }

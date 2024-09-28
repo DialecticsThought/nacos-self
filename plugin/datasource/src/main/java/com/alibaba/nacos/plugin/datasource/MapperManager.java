@@ -36,16 +36,24 @@ import static com.alibaba.nacos.api.common.Constants.Exception.FIND_TABLE_ERROR_
  * DataSource Plugin Mapper Management.
  *
  * @author hyx
+ * <pre>
+ * TODO
+ * 主要作用是管理 Mapper 对象的实例。
+ * 它通过 SPI（Service Provider Interface）机制加载 Mapper 实现类，并根据 dataSource 和 tableName 提供相应的 Mapper 实例
+ * </pre>
  **/
-
 public class MapperManager {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MapperManager.class);
 
+    /**
+     * 作用: 一个静态的 Map，用于缓存 Mapper 实例。键是 dataSource，值是另一个 Map，其中键为 tableName，值为具体的 Mapper 实例。
+     * 解释: MAPPER_SPI_MAP 通过 dataSource 和 tableName 进行映射，便于根据这些信息快速查找对应的 Mapper 实例
+     */
     public static final Map<String, Map<String, Mapper>> MAPPER_SPI_MAP = new HashMap<>();
-
+    //MapperManager 类的唯一实例，使用单例模式确保全局唯一性。
     private static final MapperManager INSTANCE = new MapperManager();
-
+    // 标志是否启用了 dataSource 相关的日志记录。此属性在 findMapper 方法中控制是否返回带有日志代理的 Mapper
     private boolean dataSourceLogEnable;
 
     private MapperManager() {
@@ -54,6 +62,7 @@ public class MapperManager {
 
     /**
      * Get the instance of MapperManager.
+     *
      * @return The instance of MapperManager.
      */
     public static MapperManager instance(boolean isDataSourceLogEnable) {
@@ -65,9 +74,12 @@ public class MapperManager {
      * The init method.
      */
     public synchronized void loadInitial() {
+        // 通过 SPI 机制加载 Mapper 的实现类
         Collection<Mapper> mappers = NacosServiceLoader.load(Mapper.class);
+        // 遍历所有加载的 Mapper 实例，调用 putMapper 方法将它们存入 MAPPER_SPI_MAP
         for (Mapper mapper : mappers) {
             putMapper(mapper);
+            // 记录每个 Mapper 的加载日志，显示其对应的 dataSource 和 tableName
             LOGGER.info("[MapperManager] Load Mapper({}) datasource({}) tableName({}) successfully.",
                     mapper.getClass(), mapper.getDataSource(), mapper.getTableName());
         }
@@ -75,6 +87,7 @@ public class MapperManager {
 
     /**
      * To join mapper in MAPPER_SPI_MAP.
+     *
      * @param mapper The mapper you want join.
      */
     public static synchronized void join(Mapper mapper) {
@@ -86,8 +99,10 @@ public class MapperManager {
     }
 
     private static void putMapper(Mapper mapper) {
+        //使用 computeIfAbsent 方法：如果 MAPPER_SPI_MAP 中已经存在该 dataSource 的 Map，直接使用；否则创建一个新的 Map
         Map<String, Mapper> mapperMap = MAPPER_SPI_MAP.computeIfAbsent(mapper.getDataSource(), key ->
                 new HashMap<>(16));
+        // 使用 putIfAbsent 方法：将 mapper 按照其 tableName 放入 dataSource 对应的 Map 中，但如果已经存在相同的 tableName，则不覆盖原有的 Mapper
         mapperMap.putIfAbsent(mapper.getTableName(), mapper);
     }
 
@@ -112,7 +127,7 @@ public class MapperManager {
             throw new NacosRuntimeException(FIND_DATASOURCE_ERROR_CODE,
                     "[MapperManager] Failed to find the datasource,dataSource:" + dataSource);
         }
-        // 根据表名称获取mapper
+        // 根据 tableName 获取 Mapper 实例。如果未找到 tableName 对应的 Mapper，则抛出异常
         Mapper mapper = tableMapper.get(tableName);
         if (Objects.isNull(mapper)) {
             throw new NacosRuntimeException(FIND_TABLE_ERROR_CODE,

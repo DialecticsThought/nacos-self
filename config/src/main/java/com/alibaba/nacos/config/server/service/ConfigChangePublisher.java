@@ -39,6 +39,8 @@ public class ConfigChangePublisher {
             return;
         }
         // TODO 查看 ConfigDataChangeEvent的onEvent方法 就是AsyncNotifyService 类里面
+        // TODO 查看 com.alibaba.nacos.config.server.service.notify.AsyncNotifyService#AsyncNotifyService 构造方法
+        // TODO 查看 com.alibaba.nacos.config.server.service.notify.AsyncNotifyService其他方法
         NotifyCenter.publishEvent(event);
     }
 
