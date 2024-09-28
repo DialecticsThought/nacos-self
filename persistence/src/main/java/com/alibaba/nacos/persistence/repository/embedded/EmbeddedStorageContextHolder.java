@@ -29,11 +29,11 @@ import java.util.Map;
  * @author xiweng.yy
  */
 public class EmbeddedStorageContextHolder {
-    
+
     private static final ThreadLocal<ArrayList<ModifyRequest>> SQL_CONTEXT = ThreadLocal.withInitial(ArrayList::new);
-    
+
     private static final ThreadLocal<Map<String, String>> EXTEND_INFO_CONTEXT = ThreadLocal.withInitial(HashMap::new);
-    
+
     /**
      * Add sql context.
      *
@@ -41,15 +41,21 @@ public class EmbeddedStorageContextHolder {
      * @param args argument list
      */
     public static void addSqlContext(String sql, Object... args) {
+        // TODO ModifyRequest 的容器
         ArrayList<ModifyRequest> requests = SQL_CONTEXT.get();
+        // TODO 查看 ModifyRequest 一个对象就是一个增删改的语句
         ModifyRequest context = new ModifyRequest();
+        //  SQL 执行的序号
         context.setExecuteNo(requests.size());
+        // 要执行的实际 SQL 查询
         context.setSql(sql);
+        // // SQL 查询的参数数组
         context.setArgs(args);
         requests.add(context);
+        // 每一个线程存放了 这个容器
         SQL_CONTEXT.set(requests);
     }
-    
+
     /**
      * Add sql context.
      *
@@ -63,11 +69,13 @@ public class EmbeddedStorageContextHolder {
         context.setExecuteNo(requests.size());
         context.setSql(sql);
         context.setArgs(args);
+        // // 指示当 SQL 更新失败时是否回滚事务
         context.setRollBackOnUpdateFail(rollbackOnUpdateFail);
         requests.add(context);
+
         SQL_CONTEXT.set(requests);
     }
-    
+
     /**
      * Put extend info.
      *
@@ -79,7 +87,7 @@ public class EmbeddedStorageContextHolder {
         old.put(key, value);
         EXTEND_INFO_CONTEXT.set(old);
     }
-    
+
     /**
      * Put all extend info.
      *
@@ -90,7 +98,7 @@ public class EmbeddedStorageContextHolder {
         old.putAll(map);
         EXTEND_INFO_CONTEXT.set(old);
     }
-    
+
     /**
      * Determine if key is included.
      *
@@ -103,15 +111,15 @@ public class EmbeddedStorageContextHolder {
         EXTEND_INFO_CONTEXT.set(extendInfo);
         return exist;
     }
-    
+
     public static List<ModifyRequest> getCurrentSqlContext() {
         return SQL_CONTEXT.get();
     }
-    
+
     public static Map<String, String> getCurrentExtendInfo() {
         return EXTEND_INFO_CONTEXT.get();
     }
-    
+
     public static void cleanAllContext() {
         SQL_CONTEXT.remove();
         EXTEND_INFO_CONTEXT.remove();

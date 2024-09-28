@@ -73,6 +73,12 @@ public class ConfigOperationService {
      *
      * @throws NacosException NacosException.
      * <pre>
+     *   该方法用于发布配置数据，
+     *   接收三个参数：
+     *   configForm（包含配置的基本信息）、
+     *   configRequestInfo（包含请求的相关信息，如源IP、MD5值等）、
+     *   encryptedDataKey（加密的密钥，用于处理配置内容加密）
+     *
      *  通常情况下，我们发布配置，都不指定tag，其实就做了两件事：
      * 1、插入或更新配置信息
      * 2、发布配置数据变动事件
@@ -95,7 +101,9 @@ public class ConfigOperationService {
         ConfigInfo configInfo = new ConfigInfo(configForm.getDataId(), configForm.getGroup(),
                 configForm.getNamespaceId(), configForm.getAppName(), configForm.getContent());
         //set old md5
+        //  检查 configRequestInfo 中是否包含 casMd5 值（非空
         if (StringUtils.isNotBlank(configRequestInfo.getCasMd5())) {
+            // 如果存在此值，则将其设置到 configInfo 对象中，确保后续操作时可以进行一致性校验
             configInfo.setMd5(configRequestInfo.getCasMd5());
         }
         configInfo.setType(configForm.getType());
@@ -109,7 +117,8 @@ public class ConfigOperationService {
             if (StringUtils.isBlank(configForm.getTag())) {
                 if (StringUtils.isNotBlank(configRequestInfo.getCasMd5())) {
                     // 1、插入 or 更新配置信息
-                    // 这里分为内置数据库（EmbeddedConfigInfoPersistServiceImpl）和外置数据库（ExternalConfigInfoPersistServiceImpl）操作，通常我们都是使用MySQL进行持久化存储
+                    // 这里分为内置数据库（EmbeddedConfigInfoPersistServiceImpl）和外置数据库（ExternalConfigInfoPersistServiceImpl）操作，
+                    // 通常我们都是使用MySQL进行持久化存储
                     // TODO 进入 ExternalConfigInfoPersistServiceImpl
                     configOperateResult = configInfoPersistService.insertOrUpdateCas(configRequestInfo.getSrcIp(),
                             configForm.getSrcUser(), configInfo, configAdvanceInfo);
