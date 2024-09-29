@@ -33,39 +33,47 @@ import static com.alibaba.nacos.config.server.utils.LogUtil.DEFAULT_LOG;
  * @author Nacos
  * @author Wei.Wang
  * @date 2020/7/5 12:18 PM
+ *
+ * TODO
+ * 用于将所有 Beta 配置信息转储到本地缓存。
+ * 这个类实现了 NacosTaskProcessor 接口，通过分页的方式处理大量的 Beta 配置信息，并逐条转储
  */
 public class DumpAllBetaProcessor implements NacosTaskProcessor {
-    
+
     public DumpAllBetaProcessor(ConfigInfoBetaPersistService configInfoBetaPersistService) {
         this.configInfoBetaPersistService = configInfoBetaPersistService;
     }
-    
+
     @Override
     public boolean process(NacosTask task) {
         int rowCount = configInfoBetaPersistService.configInfoBetaCount();
         int pageCount = (int) Math.ceil(rowCount * 1.0 / PAGE_SIZE);
-        
+
         int actualRowCount = 0;
         for (int pageNo = 1; pageNo <= pageCount; pageNo++) {
+            // 从数据库中获取当前页的 Beta 配置信息。pageNo 是当前页码，PAGE_SIZE 是每页的条目数
             Page<ConfigInfoBetaWrapper> page = configInfoBetaPersistService.findAllConfigInfoBetaForDumpAll(pageNo,
                     PAGE_SIZE);
             if (page != null) {
+                // 获取当前页中的所有 ConfigInfoBetaWrapper 对象。每个 ConfigInfoBetaWrapper 代表一条 Beta 配置信息，包括 dataId、group、tenant 等字段
                 for (ConfigInfoBetaWrapper cf : page.getPageItems()) {
+                    // 调用 ConfigCacheService.dumpBeta 方法，将当前的 Beta 配置信息转储到本地缓存。
+                    // 传递的参数包括 dataId、group、tenant、配置内容 content、最后修改时间 lastModified、Beta IP 列表 betaIps 和加密密钥 encryptedDataKey
                     boolean result = ConfigCacheService.dumpBeta(cf.getDataId(), cf.getGroup(), cf.getTenant(),
                             cf.getContent(), cf.getLastModified(), cf.getBetaIps(), cf.getEncryptedDataKey());
                     LogUtil.DUMP_LOG.info("[dump-all-beta-ok] result={}, {}, {}, length={}, md5={}", result,
                             GroupKey2.getKey(cf.getDataId(), cf.getGroup()), cf.getLastModified(),
                             cf.getContent().length(), cf.getMd5());
                 }
-                
+                // 累加当前页处理的 Beta 配置信息条数，更新已处理的总条目数
                 actualRowCount += page.getPageItems().size();
                 DEFAULT_LOG.info("[all-dump-beta] {} / {}", actualRowCount, rowCount);
             }
         }
         return true;
     }
-    
+
     static final int PAGE_SIZE = 1000;
-    
+
     final ConfigInfoBetaPersistService configInfoBetaPersistService;
 }

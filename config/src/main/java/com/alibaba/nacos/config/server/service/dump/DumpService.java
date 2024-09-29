@@ -284,10 +284,12 @@ public abstract class DumpService {
 
                 // update Beta cache
                 LogUtil.DEFAULT_LOG.info("start clear all config-info-beta.");
+                // TODO 进入
                 ConfigDiskServiceFactory.getInstance().clearAllBeta();
                 // 清除所有 Beta 配置信息的缓存，确保新的 Beta 配置信息被加载
                 // 如果 Beta 表存在（通过 isExistTable 方法检查），则调用 dumpAllBetaProcessor 处理所有 Beta 配置
                 if (namespacePersistService.isExistTable(BETA_TABLE_NAME)) {
+                    // TODO 进入
                     dumpAllBetaProcessor.process(new DumpAllBetaTask());
                 }
                 // update Tag cache
@@ -296,6 +298,7 @@ public abstract class DumpService {
                 ConfigDiskServiceFactory.getInstance().clearAllTag();
                 if (namespacePersistService.isExistTable(TAG_TABLE_NAME)) {
                     // 如果标签表存在，则通过 dumpAllTagProcessor 处理所有标签配置
+                    // TODO 进入
                     dumpAllTagProcessor.process(new DumpAllTagTask());
                 }
 

@@ -95,7 +95,7 @@ public class DumpAllProcessor implements NacosTaskProcessor {
             }
 
             for (ConfigInfoWrapper cf : page.getPageItems()) {
-                //   // 遍历查询到的配置信息，将 lastMaxId 更新为当前最大 ID，确保下一次分页从正确的 ID 继续
+                // 遍历查询到的配置信息，将 lastMaxId 更新为当前最大 ID，确保下一次分页从正确的 ID 继续
                 lastMaxId = Math.max(cf.getId(), lastMaxId);
                 //if not start up, page query will not return content, check md5 and lastModified first ,if changed ,get single content info to dump.
                 if (!dumpAllTask.isStartUp()) {// 对于非启动时任务，不会直接获取配置信息的内容。
@@ -119,16 +119,17 @@ public class DumpAllProcessor implements NacosTaskProcessor {
                 if (cf == null) { // 如果配置数据为空，则跳过
                     continue;
                 }
+                // 聚合白名单
                 if (cf.getDataId().equals(AggrWhitelist.AGGRIDS_METADATA)) {
                     // TODO 进入
                     AggrWhitelist.load(cf.getContent());
                 }
-
+                // 客户端白名单
                 if (cf.getDataId().equals(ClientIpWhiteList.CLIENT_IP_WHITELIST_METADATA)) {
                     // TODO 进入
                     ClientIpWhiteList.load(cf.getContent());
                 }
-
+                // 切换服务
                 if (cf.getDataId().equals(SwitchService.SWITCH_META_DATA_ID)) {
                     // TODO 进入
                     SwitchService.load(cf.getContent());
@@ -145,6 +146,7 @@ public class DumpAllProcessor implements NacosTaskProcessor {
                 // 使用线程池中的线程执行转储任务。通过 ConfigCacheService.dumpWithMd5 方法将配置内容及其 MD5 值转储到本地磁盘
                 executorService.execute(() -> {
                     final String md5Utf8 = MD5Utils.md5Hex(content, ENCODE_UTF8);
+                    // TODO 进入
                     boolean result = ConfigCacheService.dumpWithMd5(dataId, group, tenant, content, md5Utf8,
                             lastModified, type, encryptedDataKey);
                     if (result) {

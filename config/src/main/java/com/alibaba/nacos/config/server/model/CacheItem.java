@@ -30,59 +30,60 @@ import java.util.Map;
  * @author Nacos
  */
 public class CacheItem {
-    
+    // 唯一标识该缓存项的键，由 dataId、group 和 tenant 生成
     final String groupKey;
-    
+    // 存储配置项的类型
     public String type;
-    
+    // TODO 进入
     ConfigCache configCache = new ConfigCache();
-    
+
     /**
      * Use for beta.
+     * 标记该配置项是否为 Beta 版本
      */
     public volatile boolean isBeta = false;
-    
+    // 存储 Beta 版本的 IP 列表
     public volatile List<String> ips4Beta;
-    
+    // 存储 Beta 版本的配置信息
     ConfigCache configCacheBeta = null;
-    
+
     /**
      * Use for batch.
      */
     public volatile boolean isBatch = false;
-    
+    // 批处理的分隔符
     public volatile int delimiter = 0;
-    
+    // 存储批处理模式的配置信息
     ConfigCache configCacheBatch = null;
-    
+
     /**
      * Use for tag.
      */
     private volatile Map<String, ConfigCache> configCacheTags = null;
-    
+
     private final SimpleReadWriteLock rwLock = new SimpleReadWriteLock();
-    
+
     public CacheItem(String groupKey, String encryptedDataKey) {
         this.groupKey = StringPool.get(groupKey);
         this.getConfigCache().setEncryptedDataKey(encryptedDataKey);
     }
-    
+
     public CacheItem(String groupKey) {
         this.groupKey = StringPool.get(groupKey);
     }
-    
+
     public ConfigCache getConfigCache() {
         return configCache;
     }
-    
+
     public boolean isBeta() {
         return isBeta;
     }
-    
+
     public void setBeta(boolean isBeta) {
         this.isBeta = isBeta;
     }
-    
+
     /**
      * remove beta.
      */
@@ -91,31 +92,31 @@ public class CacheItem {
         this.ips4Beta = null;
         configCacheBeta = null;
     }
-    
+
     public List<String> getIps4Beta() {
         return ips4Beta;
     }
-    
+
     public void setIps4Beta(List<String> ips4Beta) {
         this.ips4Beta = ips4Beta;
     }
-    
+
     public SimpleReadWriteLock getRwLock() {
         return rwLock;
     }
-    
+
     public String getType() {
         return type;
     }
-    
+
     public void setType(String type) {
         this.type = type;
     }
-    
+
     public String getGroupKey() {
         return groupKey;
     }
-    
+
     /**
      * init beta cache if empty.
      */
@@ -127,7 +128,7 @@ public class CacheItem {
             this.ips4Beta = new ArrayList<>();
         }
     }
-    
+
     /**
      * get config cache beta.
      *
@@ -136,20 +137,21 @@ public class CacheItem {
     public ConfigCache getConfigCacheBeta() {
         return configCacheBeta;
     }
-    
+
     /**
      * init batch cache if empty.
+     * 如果批处理缓存为空，初始化批处理缓存
      */
     public void initBatchCacheIfEmpty() {
         if (this.configCacheBatch == null) {
             this.configCacheBatch = new ConfigCache();
         }
     }
-    
+
     public ConfigCache getConfigCacheBatch() {
         return configCacheBatch;
     }
-    
+
     /**
      * remove batch.
      */
@@ -157,16 +159,17 @@ public class CacheItem {
         this.configCacheBatch = null;
         this.isBatch = false;
     }
-    
+
     /**
      * init config tags if empty.
+     *
      */
     public void initConfigTagsIfEmpty() {
         if (this.getConfigCacheTags() == null) {
             this.configCacheTags = new HashMap<>(16);
         }
     }
-    
+
     /**
      * init config tag if empty.
      *
@@ -178,50 +181,50 @@ public class CacheItem {
             this.configCacheTags.put(tag, new ConfigCache());
         }
     }
-    
+
     public void clearConfigTags() {
         this.configCacheTags = null;
     }
-    
+
     public Map<String, ConfigCache> getConfigCacheTags() {
         return configCacheTags;
     }
-    
+
     public boolean isBatch() {
         return isBatch;
     }
-    
+
     public void setBatch(boolean batch) {
         isBatch = batch;
     }
-    
+
     public int getDelimiter() {
         return delimiter;
     }
-    
+
     public void setDelimiter(int delimiter) {
         this.delimiter = delimiter;
     }
-    
+
     public long getTagLastModified(String tag) {
         if (configCacheTags == null || !configCacheTags.containsKey(tag)) {
             return -1L;
         }
         return configCacheTags.get(tag).getLastModifiedTs();
     }
-    
+
     public String getTagEncryptedDataKey(String tag) {
         if (configCacheTags == null || !configCacheTags.containsKey(tag)) {
             return null;
         }
         return configCacheTags.get(tag).getEncryptedDataKey();
     }
-    
+
     public String getTagMd5(String tag, String encode) {
         if (configCacheTags == null || !configCacheTags.containsKey(tag)) {
             return null;
         }
         return configCacheTags.get(tag).getMd5(encode);
     }
-    
+
 }

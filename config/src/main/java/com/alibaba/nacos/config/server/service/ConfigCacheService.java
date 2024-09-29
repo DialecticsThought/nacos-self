@@ -46,6 +46,8 @@ import static com.alibaba.nacos.config.server.utils.LogUtil.FATAL_LOG;
  * Config service.
  *
  * @author Nacos
+ *
+ * TODO ConfigCacheService 是 Nacos 配置服务中的一个核心类，负责处理配置数据的缓存管理，包括加载、更新、持久化等操作
  */
 public class ConfigCacheService {
 
@@ -59,6 +61,9 @@ public class ConfigCacheService {
 
     /**
      * groupKey -> cacheItem.
+     *
+     * 用于存储每个 groupKey 对应的 CacheItem 对象，
+     * groupKey 是基于 dataId、group 和 tenant 生成的唯一标识符
      */
     private static final ConcurrentHashMap<String, CacheItem> CACHE = new ConcurrentHashMap<>();
 
@@ -80,6 +85,7 @@ public class ConfigCacheService {
      */
     public static boolean dumpWithMd5(String dataId, String group, String tenant, String content, String md5,
             long lastModifiedTs, String type, String encryptedDataKey) {
+        // 通过 GroupKey2.getKey 生成唯一的 groupKey，这是一个基于 dataId、group 和 tenant 的标识符
         String groupKey = GroupKey2.getKey(dataId, group, tenant);
         CacheItem ci = makeSure(groupKey, encryptedDataKey);
         ci.setType(type);
@@ -459,61 +465,81 @@ public class ConfigCacheService {
 
     /**
      * Update md5 value.
-     *
-     * @param groupKey       groupKey string value.
-     * @param md5Utf8        md5 string value.
-     * @param lastModifiedTs lastModifiedTs long value.
+     * 用于更新 groupKey 对应的普通配置的 MD5 值
+     * @param groupKey       groupKey string value. 唯一标识配置项的键
+     * @param md5Utf8        md5 string value. UTF-8 编码的 MD5 值
+     * @param lastModifiedTs lastModifiedTs long value. 最后修改时间戳
      */
     public static void updateMd5(String groupKey, String md5Utf8, long lastModifiedTs, String encryptedDataKey) {
+        // 确保 groupKey 对应的缓存项存在。如果不存在，则创建新的缓存项并将其放入缓存中
         CacheItem cache = makeSure(groupKey, encryptedDataKey);
+        // 如果当前的 MD5 值为空，或者与传入的 md5Utf8 不一致，则表示需要更新 MD5 值
         if (cache.getConfigCache().getMd5Utf8() == null || !cache.getConfigCache().getMd5Utf8().equals(md5Utf8)) {
+            // 将新的 UTF-8 编码的 MD5 值设置到 configCache 中
             cache.getConfigCache().setMd5Utf8(md5Utf8);
+            // 将新的最后修改时间戳设置到 configCache 中
             cache.getConfigCache().setLastModifiedTs(lastModifiedTs);
+            // 将新的加密密钥设置到 configCache 中
             cache.getConfigCache().setEncryptedDataKey(encryptedDataKey);
+            // 通过 NotifyCenter 发布一个本地数据变更事件，通知系统其他部分该配置已更新
             NotifyCenter.publishEvent(new LocalDataChangeEvent(groupKey));
         }
     }
 
     /**
      * Update Beta md5 value.
-     *
-     * @param groupKey       groupKey string value.
-     * @param md5Utf8        md5UTF8 string value.
-     * @param ips4Beta       ips4Beta List.
-     * @param lastModifiedTs lastModifiedTs long value.
+     * 用于更新 groupKey 对应的 Beta 配置的 MD5 值、最后修改时间和加密密钥，并更新 Beta 配置的 IP 列表
+     * @param groupKey       groupKey string value. 唯一标识配置项的键
+     * @param md5Utf8        md5UTF8 string value. UTF-8 编码的 MD5 值
+     * @param ips4Beta       ips4Beta List.  Beta 版本的 IP 列表
+     * @param lastModifiedTs lastModifiedTs long value. 最后修改时间戳
+     * @param encryptedDataKey4Beta 用于 Beta 配置的加密密钥
      */
     public static void updateBetaMd5(String groupKey, String md5Utf8, List<String> ips4Beta, long lastModifiedTs,
             String encryptedDataKey4Beta) {
+        // 确保 groupKey 对应的缓存项存在。如果不存在，则创建新的缓存项。这里不需要传递加密密钥
         CacheItem cache = makeSure(groupKey, null);
+        // 如果 configCacheBeta 为空，则初始化 Beta 缓存
         cache.initBetaCacheIfEmpty();
+        // 获取 configCacheBeta 中存储的当前 MD5 值
         String betaMd5Utf8 = cache.getConfigCacheBeta().getMd5(ENCODE_UTF8);
+        // 如果当前 Beta 配置的 MD5 值为空，或者与传入的 md5Utf8 不一致，或者 IP 列表与缓存中的不相等，则需要更新 Beta 配置
         if (betaMd5Utf8 == null || !betaMd5Utf8.equals(md5Utf8) || !CollectionUtils.isListEqual(ips4Beta,
                 cache.ips4Beta)) {
+            // 设置 isBeta 为 true，并将传入的 ips4Beta 更新到缓存项中
             cache.isBeta = true;
             cache.ips4Beta = ips4Beta;
+            // 更新 Beta 配置的 MD5 值、最后修改时间和加密密钥
             cache.getConfigCacheBeta().setMd5Utf8(md5Utf8);
             cache.getConfigCacheBeta().setLastModifiedTs(lastModifiedTs);
             cache.getConfigCacheBeta().setEncryptedDataKey(encryptedDataKey4Beta);
+            // 通过 NotifyCenter 发布一个本地数据变更事件，通知系统其他部分该 groupKey 对应的 Beta 配置已更新
             NotifyCenter.publishEvent(new LocalDataChangeEvent(groupKey, true, ips4Beta));
         }
     }
 
     /**
      * Update tag md5 value.
-     *
-     * @param groupKey       groupKey string value.
-     * @param tag            tag string value.
-     * @param md5Utf8        md5UTF8 string value.
-     * @param lastModifiedTs lastModifiedTs long value.
+     * 该方法用于更新 groupKey 和 tag 对应的标签配置的 MD5 值、最后修改时间和加密密钥
+     * @param groupKey       groupKey string value. 唯一标识配置项的键
+     * @param tag            tag string value. 配置项的标签
+     * @param md5Utf8        md5UTF8 string value. UTF-8 编码的 MD5 值
+     * @param lastModifiedTs lastModifiedTs long value. 最后修改时间戳
+     * @param encryptedDataKey4Tag 用于标签配置的加密密钥
      */
     public static void updateTagMd5(String groupKey, String tag, String md5Utf8, long lastModifiedTs,
             String encryptedDataKey4Tag) {
+        // 确保 groupKey 对应的缓存项存在。如果不存在，则创建新的缓存项
         CacheItem cache = makeSure(groupKey, null);
+        // 如果 configCacheTags 为空，初始化标签缓存。确保 tag 对应的 ConfigCache 对象存在
         cache.initConfigTagsIfEmpty(tag);
+        //从 configCacheTags 中获取 tag 对应的缓存配置项
         ConfigCache configCache = cache.getConfigCacheTags().get(tag);
+        // 更新标签配置的 MD5 值、最后修改时间和加密密钥
         configCache.setMd5Utf8(md5Utf8);
         configCache.setLastModifiedTs(lastModifiedTs);
         configCache.setEncryptedDataKey(encryptedDataKey4Tag);
+        // 通过 NotifyCenter 发布一个本地数据变更事件，通知系统其他部分该 groupKey 和 tag 对应的配置已更新
         NotifyCenter.publishEvent(new LocalDataChangeEvent(groupKey, tag));
     }
 
@@ -524,50 +550,73 @@ public class ConfigCacheService {
         return getContentMd5(groupKey, "", "");
     }
 
+    /**
+     * 根据 groupKey、ip 和 tag 获取缓存中配置项的 MD5 值
+     * @param groupKey
+     * @param ip
+     * @param tag
+     * @return
+     */
     public static String getContentMd5(String groupKey, String ip, String tag) {
+        // 从缓存中获取 groupKey 对应的 CacheItem 对象。如果该 groupKey 在缓存中存在，则返回对应的 CacheItem，否则返回 null
         CacheItem item = CACHE.get(groupKey);
+        // 如果 item 不为 null 且标记为 Beta 配置 (item.isBeta == true) 且 ips4Beta 不为空
+        // ，且 ip 在 ips4Beta 列表中，表示此配置是为特定 Beta 版本客户端服务的配置
         if (item != null && item.isBeta && item.ips4Beta != null && item.ips4Beta.contains(ip)
                 && item.getConfigCacheBeta() != null) {
+            // 返回 Beta 配置的 MD5 值
             return item.getConfigCacheBeta().getMd5(ENCODE_UTF8);
         }
-
+        // 如果 item 不为 null 且 tag 不为空，并且 item.getConfigCacheTags() 存在并包含该 tag，则表示该配置项带有标签
         if (item != null && StringUtils.isNotBlank(tag) && item.getConfigCacheTags() != null
                 && item.getConfigCacheTags().containsKey(tag)) {
+            // 返回该标签配置的 MD5 值
             return item.getConfigCacheTags().get(tag).getMd5(ENCODE_UTF8);
         }
-
+        // 如果 item 不为 null，并且它被标记为批处理配置 (isBatch == true)，且 delimiter 大于等于客户端 IP 的整数值，
+        // 且批处理缓存 (configCacheBatch) 存在，则表示这是一个批处理配置
         if (item != null && item.isBatch && item.delimiter >= InternetAddressUtil.ipToInt(ip)
                 && item.getConfigCacheBatch() != null) {
+            // 返回批处理配置的 MD5 值
             return item.getConfigCacheBatch().getMd5(ENCODE_UTF8);
         }
-
+        // 如果没有找到匹配的 Beta 配置、标签配置或批处理配置，返回 groupKey 对应的普通配置的 MD5 值。
+        // 如果 item 为 null，则返回 Constants.NULL，表示没有找到该配置
         return (null != item) ? item.getConfigCache().getMd5(ENCODE_UTF8) : Constants.NULL;
     }
 
     /**
      * Get and return beta md5 value from cache. Empty string represents no data.
+     *
+     * 用于获取指定 groupKey 对应的 Beta 配置的 MD5 值
      */
     public static String getContentBetaMd5(String groupKey) {
+        // 从缓存中获取 groupKey 对应的 CacheItem 对象。如果该 groupKey 在缓存中存在，则返回对应的 CacheItem，否则返回 null
         CacheItem item = CACHE.get(groupKey);
-
+        // 如果 item 为 null 或 item.getConfigCacheBeta() 为 null，说明该 groupKey 没有 Beta 配置，返回 Constants.NULL
         if (item == null || item.getConfigCacheBeta() == null) {
             return Constants.NULL;
         }
+        // 如果 Beta 配置存在，则返回 configCacheBeta 的 MD5 值
         return item.getConfigCacheBeta().getMd5(ENCODE_UTF8);
     }
 
     /**
      * Get and return tag md5 value from cache. Empty string represents no data.
-     *
+     * 用于获取指定 groupKey 和 tag 对应的标签配置的 MD5 值
      * @param groupKey groupKey string value.
      * @param tag      tag string value.
      * @return Content Tag Md5 value.
      */
     public static String getContentTagMd5(String groupKey, String tag) {
+        // 从缓存中获取 groupKey 对应的 CacheItem 对象。如果该 groupKey 在缓存中存在，则返回对应的 CacheItem，否则返回 null
         CacheItem item = CACHE.get(groupKey);
+        // 如果 item 为 null，或 item.getConfigCacheTags() 为 null，或 configCacheTags 中不包含 tag，
+        // 说明该 groupKey 下没有对应的标签配置，返回 Constants.NULL
         if (item == null || item.getConfigCacheTags() == null || !item.getConfigCacheTags().containsKey(tag)) {
             return Constants.NULL;
         }
+        // 如果 tag 存在于 configCacheTags 中，则返回该标签配置的 MD5 值
         return item.getConfigCacheTags().get(tag).getMd5(ENCODE_UTF8);
     }
 
@@ -582,18 +631,37 @@ public class ConfigCacheService {
         return (null != item) ? item.getIps4Beta() : Collections.emptyList();
     }
 
+    /**
+     * 返回指定 groupKey 对应的 Beta 配置的最后修改时间戳
+     * @param groupKey 唯一标识配置项的键，由 dataId、group 和 tenant 组成
+     * @return
+     */
     public static long getBetaLastModifiedTs(String groupKey) {
+        // 从缓存中获取 groupKey 对应的 CacheItem 对象。如果该 groupKey 在缓存中存在，则返回对应的 CacheItem，否则返回 null
         CacheItem item = CACHE.get(groupKey);
+        // 如果 item 不为 null 且 item.getConfigCacheBeta() 不为 null，则表示该 groupKey 存在 Beta 配置，返回 Beta 配置的最后修改时间戳。
+        // 否则，返回 0L，表示没有找到该 groupKey 对应的 Beta 配置或 Beta 配置的时间戳不存在
         return (null != item && item.getConfigCacheBeta() != null) ? item.getConfigCacheBeta().getLastModifiedTs() : 0L;
     }
 
+    /**
+     *
+     * @param groupKey  唯一标识配置项的键，由 dataId、group 和 tenant 组成
+     * @param tag 用于标识配置项的标签
+     * @return
+     */
     public static long getTagLastModifiedTs(String groupKey, String tag) {
+        // 从缓存中获取 groupKey 对应的 CacheItem 对象。如果该 groupKey 存在于缓存中，则返回对应的 CacheItem，否则返回 null
         CacheItem item = CACHE.get(groupKey);
+        // 如果 item.getConfigCacheTags() 为 null，或者 tag 不在 configCacheTags 中，
+        // 则表示该 groupKey 下不存在该 tag 对应的标签配置，返回 0
         if (item.getConfigCacheTags() == null || !item.getConfigCacheTags().containsKey(tag)) {
             return 0;
         }
+        // ConfigCache：从 configCacheTags 中获取 tag 对应的 ConfigCache 对象，用于存储该标签配置的元数据（如 MD5 和最后修改时间）
         ConfigCache configCacheTag = item.getConfigCacheTags().get(tag);
-
+        // 如果 configCacheTag 不为 null，返回该标签配置的最后修改时间戳。
+        // 如果 configCacheTag 为 null，返回 0，表示该 tag 的配置不存在
         return (null != configCacheTag) ? configCacheTag.getLastModifiedTs() : 0;
     }
 
@@ -614,25 +682,46 @@ public class ConfigCacheService {
 
     /**
      * update tag timestamp.
-     *
-     * @param groupKey       groupKey.
-     * @param tag            tag.
-     * @param lastModifiedTs lastModifiedTs.
+     * 该方法用于更新指定 groupKey 和 tag 对应的配置标签的最后修改时间
+     * @param groupKey       groupKey. 唯一标识配置项的键，由 dataId、group 和 tenant 组成
+     * @param tag            tag. 配置项的标签，用于标识带标签的配置
+     * @param lastModifiedTs lastModifiedTs. 配置项最后修改时间戳
      */
     public static void updateTagTimeStamp(String groupKey, String tag, long lastModifiedTs) {
+        // 确保 groupKey 对应的缓存项存在。如果不存在，则创建一个新的 CacheItem 并将其加入缓存
         CacheItem cache = makeSure(groupKey, null);
+        // 初始化标签缓存。如果 configCacheTags 为空，则创建新的 Map，并确保 tag 对应的 ConfigCache 存在
         cache.initConfigTagsIfEmpty(tag);
+        // 获取 tag 对应的 ConfigCache 对象，并将其最后修改时间设置为传入的 lastModifiedTs
         cache.getConfigCacheTags().get(tag).setLastModifiedTs(lastModifiedTs);
 
     }
 
+    /**
+     * 该方法用于检查 groupKey 对应的配置内容是否与指定的 MD5 值一致
+     * @param groupKey 唯一标识配置项的键
+     * @param md5 传入的 MD5 校验值，用于与服务端的 MD5 值进行比较
+     * @return
+     */
     public static boolean isUptodate(String groupKey, String md5) {
+        // 获取 groupKey 对应的配置内容的 MD5 值。如果缓存中有该 groupKey，返回该 groupKey 的 MD5 值
         String serverMd5 = ConfigCacheService.getContentMd5(groupKey);
+        // 比较传入的 md5 和从缓存中获取的 serverMd5 是否相等。如果相等，则返回 true，否则返回 false，表示配置内容没有更新
         return StringUtils.equals(md5, serverMd5);
     }
 
+    /**
+     * 该方法用于检查带有 groupKey、ip 和 tag 的配置内容是否与传入的 md5 一致
+     * @param groupKey  唯一标识配置项的键
+     * @param md5  传入的 MD5 校验值
+     * @param ip  客户端 IP，用于区分不同客户端的缓存
+     * @param tag  配置项的标签
+     * @return
+     */
     public static boolean isUptodate(String groupKey, String md5, String ip, String tag) {
+        // 获取带有 groupKey、ip 和 tag 的配置内容的 MD5 值。如果缓存中有该 groupKey 和 tag，返回该标签配置的 MD5 值
         String serverMd5 = ConfigCacheService.getContentMd5(groupKey, ip, tag);
+        // 比较传入的 md5 和从缓存中获取的 serverMd5 是否相等。如果相等，返回 true，表示配置是最新的；否则返回 false
         return StringUtils.equals(md5, serverMd5);
     }
 
@@ -687,12 +776,22 @@ public class ConfigCacheService {
         }
     }
 
+    /**
+     * 它的主要目的是确保缓存中存在与 groupKey 对应的 CacheItem
+     * @param groupKey
+     * @param encryptedDataKey
+     * @return
+     */
     static CacheItem makeSure(final String groupKey, final String encryptedDataKey) {
+        // 从 CACHE 中获取与 groupKey 对应的缓存项。如果该 groupKey 对应的缓存项已存在，则返回该缓存项
         CacheItem item = CACHE.get(groupKey);
+        // 如果 item 不为 null，说明缓存中已经有与 groupKey 对应的缓存项，直接返回该缓存项
         if (null != item) {
             return item;
         }
+        // 如果缓存中没有找到 groupKey 对应的 CacheItem，则创建一个新的 CacheItem 对象
         CacheItem tmp = new CacheItem(groupKey, encryptedDataKey);
+        // 将新的 CacheItem (tmp) 放入缓存 CACHE 中，前提是该 groupKey 在缓存中还没有对应的缓存项
         item = CACHE.putIfAbsent(groupKey, tmp);
         return (null == item) ? tmp : item;
     }
@@ -711,17 +810,23 @@ public class ConfigCacheService {
 
     /**
      * update beta ip list.
-     *
+     * 负责更新指定 groupKey 下的 Beta 配置的 IP 列表（ips4Beta）以及最后修改时间（lastModifiedTs）
      * @param groupKey       groupKey.
      * @param ips4Beta       ips4Beta.
      * @param lastModifiedTs lastModifiedTs.
      */
     private static void updateBetaIpList(String groupKey, List<String> ips4Beta, long lastModifiedTs) {
+       // 保 groupKey 对应的缓存项存在。如果不存在则创建一个新的 CacheItem，并将其加入缓存
         CacheItem cache = makeSure(groupKey, null);
+        // 初始化 Beta 缓存。如果 configCacheBeta 为空，则创建一个新的 ConfigCache 用于存储 Beta 配置
         cache.initBetaCacheIfEmpty();
+        // 将当前 CacheItem 标记为 Beta 版本的配置。isBeta 被设置为 true，表示该缓存项有 Beta 配置
         cache.setBeta(true);
+        // 将传入的 ips4Beta（IP 列表）存储到 CacheItem 中，替换之前的 Beta 配置的 IP 列表
         cache.setIps4Beta(ips4Beta);
+        // 获取 configCacheBeta 并更新其 lastModifiedTs，即 Beta 配置的最后修改时间
         cache.getConfigCacheBeta().setLastModifiedTs(lastModifiedTs);
+        // 发布一个本地数据变更事件，通知系统其他部分该 groupKey 对应的 Beta 配置发生了变化，包括 IP 列表的更新
         NotifyCenter.publishEvent(new LocalDataChangeEvent(groupKey, true, ips4Beta));
 
     }
@@ -733,8 +838,11 @@ public class ConfigCacheService {
      * @param lastModifiedTs lastModifiedTs.
      */
     private static void updateBetaTimeStamp(String groupKey, long lastModifiedTs) {
+        // 确保 groupKey 对应的缓存项存在。如果不存在则创建一个新的 CacheItem，并将其加入缓存
         CacheItem cache = makeSure(groupKey, null);
+        // 初始化 Beta 缓存。如果 configCacheBeta 为空，则创建一个新的 ConfigCache 用于存储 Beta 配置
         cache.initBetaCacheIfEmpty();
+        // 获取 configCacheBeta 并更新其 lastModifiedTs，即 Beta 配置的最后修改时间
         cache.getConfigCacheBeta().setLastModifiedTs(lastModifiedTs);
 
     }
