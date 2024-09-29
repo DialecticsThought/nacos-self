@@ -26,25 +26,25 @@ import java.util.List;
  */
 @SuppressWarnings("PMD.ClassNamingShouldBeCamelRule")
 public class AclInfo implements Serializable {
-    
+
     private static final long serialVersionUID = 1383026926036269457L;
-    
+    // 表示 IP 白名单是否启用。如果 true，则白名单处于启用状态；如果 false，则白名单关闭
     private Boolean isOpen;
-    
+    // 存储 IP 白名单的具体 IP 地址列表，类型为 List<String>
     private List<String> ips;
-    
+
     public List<String> getIps() {
         return ips;
     }
-    
+
     public void setIps(List<String> ips) {
         this.ips = ips;
     }
-    
+
     public Boolean getIsOpen() {
         return isOpen;
     }
-    
+
     public void setIsOpen(Boolean isOpen) {
         this.isOpen = isOpen;
     }

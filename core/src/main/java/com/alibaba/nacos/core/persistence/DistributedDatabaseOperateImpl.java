@@ -305,21 +305,39 @@ public class DistributedDatabaseOperateImpl extends RequestProcessor4CP implemen
         }
     }
 
+    /**
+     *
+     * @param sql    sqk text  要执行的 SQL 查询语句
+     * @param args   sql parameters  SQL 查询的参数数组，用于参数化查询
+     * @param mapper Database query result converter   用于将查询结果映射为 Java 对象的实例
+     * @return
+     * @param <R>  返回一个 List，其中每个元素是通过 RowMapper 映射的结果
+     */
     @Override
     public <R> List<R> queryMany(String sql, Object[] args, RowMapper<R> mapper) {
         try {
             LoggerUtils.printIfDebugEnabled(LOGGER, "queryMany info : sql : {}, args : {}", sql, args);
-
+            // 创建一个 SelectRequest 对象，通过 builder 方法构建，
+            // 设置 queryType 为 QUERY_MANY_WITH_MAPPER_WITH_ARGS，表示这是一个带有参数的多条记录查询。
+            // 将 SQL 查询语句和参数作为请求的一部分，序列化成字节数组 data，便于后续网络传输。
+            // mapper.getClass().getCanonicalName()：用于获取 RowMapper 类的完整类名，并添加到请求中，确保服务端可以理解如何处理映射
             byte[] data = serializer.serialize(
                     SelectRequest.builder().queryType(QueryType.QUERY_MANY_WITH_MAPPER_WITH_ARGS).sql(sql).args(args)
                             .className(mapper.getClass().getCanonicalName()).build());
-
+            // 通过 EmbeddedStorageContextHolder.containsExtendInfo 检查是否需要阻塞读取。
+            // 如果存储上下文中包含 EXTEND_NEED_READ_UNTIL_HAVE_DATA，则设置 blockRead 为 true，表示在数据可用之前进行阻塞读取。
+            //这通常用于需要等待数据返回的场景
             final boolean blockRead = EmbeddedStorageContextHolder
                     .containsExtendInfo(PersistenceConstant.EXTEND_NEED_READ_UNTIL_HAVE_DATA);
-
+            // 使用 innerRead 方法发送读取请求：
+            // 调用 ReadRequest.newBuilder() 构建读取请求，设置 group（通常用于标识数据库分组）和序列化后的请求数据 data。
+            // 如果 blockRead 为 true，请求会阻塞直到有数据返回。
+            // 请求完成后，返回的结果是一个 Response 对象，包含了查询的结果数据或错误信息。
             Response response = innerRead(
                     ReadRequest.newBuilder().setGroup(group()).setData(ByteString.copyFrom(data)).build(), blockRead);
             if (response.getSuccess()) {
+                // 如果查询成功（即 response.getSuccess() 返回 true），则将返回的数据通过 serializer.deserialize 反序列化为 List 对象
+                // 将返回的字节数组反序列化为一个 List，该列表中的每个元素是通过 RowMapper 映射的查询结果
                 return serializer.deserialize(response.getData().toByteArray(), List.class);
             }
             throw new NJdbcException(response.getErrMsg());

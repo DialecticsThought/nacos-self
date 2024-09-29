@@ -67,6 +67,11 @@ import static com.alibaba.nacos.config.server.utils.LogUtil.FATAL_LOG;
  * Dump data service.
  *
  * @author Nacos
+ * <pre>
+ *    Nacos 本地配置的加载无疑肯定是 Nacos Server 启动时候加载的，Nacos 本地配置的加载和
+ *    DumpService 有莫大的关系，翻看源码可以看到 DumpService 是一个抽象类，它有两个子类，分别
+ *   是 EmbeddedDumpService 和 ExternalDumpService，接下来我们将根据这两个类来展开分析。
+ * </pre>
  */
 @SuppressWarnings("PMD.AbstractClassShouldStartWithAbstractNamingRule")
 public abstract class DumpService {
@@ -257,37 +262,59 @@ public abstract class DumpService {
         }
     }
 
+    /**
+     * dumpOperate 方法是 Nacos 配置服务器在启动时执行的一项操作，
+     * 它会将配置信息转储到磁盘，并设置相关的周期性任务，
+     * 如清理历史数据、更新 Beta 配置、标签配置等
+     * @throws NacosException
+     */
     protected void dumpOperate() throws NacosException {
+        // 定义了一个转储操作的上下文名称 dumpFileContext
         String dumpFileContext = "CONFIG_DUMP_TO_FILE";
+        // 开始记录该转储操作的计时。这用于性能监控或调试
         TimerContext.start(dumpFileContext);
         try {
             LogUtil.DEFAULT_LOG.warn("DumpService start");
-
+            // 获取当前时间，通常用于记录操作的时间戳或历史记录操作
             Timestamp currentTime = new Timestamp(System.currentTimeMillis());
 
             try {
+                // TODO 进入
                 dumpAllConfigInfoOnStartup(dumpAllProcessor);
 
                 // update Beta cache
                 LogUtil.DEFAULT_LOG.info("start clear all config-info-beta.");
                 ConfigDiskServiceFactory.getInstance().clearAllBeta();
+                // 清除所有 Beta 配置信息的缓存，确保新的 Beta 配置信息被加载
+                // 如果 Beta 表存在（通过 isExistTable 方法检查），则调用 dumpAllBetaProcessor 处理所有 Beta 配置
                 if (namespacePersistService.isExistTable(BETA_TABLE_NAME)) {
                     dumpAllBetaProcessor.process(new DumpAllBetaTask());
                 }
                 // update Tag cache
                 LogUtil.DEFAULT_LOG.info("start clear all config-info-tag.");
+                // 清除所有标签配置信息的缓存
                 ConfigDiskServiceFactory.getInstance().clearAllTag();
                 if (namespacePersistService.isExistTable(TAG_TABLE_NAME)) {
+                    // 如果标签表存在，则通过 dumpAllTagProcessor 处理所有标签配置
                     dumpAllTagProcessor.process(new DumpAllTagTask());
                 }
 
                 // add to dump aggr
+                // 获取所有变更的聚合的配置信息并进行转储
+                // 每个 ConfigInfoChanged 对象代表一个变更的配置信息。这可能包括多租户、多组别和多数据项的配置信息
                 List<ConfigInfoChanged> configList = configInfoAggrPersistService.findAllAggrGroup();
                 if (configList != null && !configList.isEmpty()) {
+                    // 记录获取到的配置变更信息的总数，用于统计和监控
+                    // total 是一个统计变量，可能用于后续日志记录或者处理调度
                     total = configList.size();
+                    // mergeDatumService.splitList()：这个方法将原始的配置列表分成多个小列表，便于并行处理
+                    // configList：需要拆分的原始配置列表
+                    // INIT_THREAD_COUNT：指定的线程数量，通常这个值用于确定如何将列表划分为若干小部分。拆分后的每个子列表将由一个线程处理
                     List<List<ConfigInfoChanged>> splitList = mergeDatumService.splitList(configList,
                             INIT_THREAD_COUNT);
+                    // 遍历 splitList 中的每个子列表，并对每个子列表中的配置信息执行合并操作
                     for (List<ConfigInfoChanged> list : splitList) {
+                        // 合并处理的核心方法，它将子列表中的配置信息进行合并。合并的具体逻辑可能包括去重、聚合、优化数据存储等操作
                         mergeDatumService.executeConfigsMerge(list);
                     }
                     LOGGER.info("server start, schedule merge end.");
@@ -300,26 +327,26 @@ public abstract class DumpService {
                         e);
             }
             if (!EnvUtil.getStandaloneMode()) {
-
+                // 使用随机数设置转储任务的初始延迟时间，防止所有节点在同一时刻同时开始转储任务
                 Random random = new Random();
                 long initialDelay = random.nextInt(INITIAL_DELAY_IN_MINUTE) + 10;
                 LogUtil.DEFAULT_LOG.warn("initialDelay:{}", initialDelay);
-
+                // 调度三个定时任务，分别用于全量配置、Beta 配置、和标签配置的定时转储。任务会在初始延迟后定期执行
                 ConfigExecutor.scheduleConfigTask(new DumpAllProcessorRunner(), initialDelay,
                         DUMP_ALL_INTERVAL_IN_MINUTE, TimeUnit.MINUTES);
-
                 ConfigExecutor.scheduleConfigTask(new DumpAllBetaProcessorRunner(), initialDelay,
                         DUMP_ALL_INTERVAL_IN_MINUTE, TimeUnit.MINUTES);
-
                 ConfigExecutor.scheduleConfigTask(new DumpAllTagProcessorRunner(), initialDelay,
                         DUMP_ALL_INTERVAL_IN_MINUTE, TimeUnit.MINUTES);
+
+                // 调度另一个任务，专门处理配置变更的转储操作，确保新的配置信息被正确转储到磁盘或其他存储中
                 ConfigExecutor.scheduleConfigChangeTask(
                         new DumpChangeConfigWorker(this.configInfoPersistService, this.historyConfigInfoPersistService,
                                 currentTime), random.nextInt((int) PropertyUtil.getDumpChangeWorkerInterval()),
                         TimeUnit.MILLISECONDS);
 
             }
-
+            // 每隔 10 分钟调度一次任务，清理历史配置信息，防止存储过多历史版本占用大量空间
             ConfigExecutor.scheduleConfigTask(new ConfigHistoryClear(), 10, 10, TimeUnit.MINUTES);
         } finally {
             TimerContext.end(dumpFileContext, LogUtil.DUMP_LOG);
@@ -331,7 +358,11 @@ public abstract class DumpService {
 
         try {
             LogUtil.DEFAULT_LOG.info("start clear all config-info.");
+            // TODO 进入
             ConfigDiskServiceFactory.getInstance().clearAll();
+            // 查看任务执行的内容
+            // TODO 进入 DumpAllTask
+            // TODO 查看 dumpAllProcessor.process
             dumpAllProcessor.process(new DumpAllTask(true));
         } catch (Exception e) {
             LogUtil.FATAL_LOG.error("dump config fail" + e.getMessage());
