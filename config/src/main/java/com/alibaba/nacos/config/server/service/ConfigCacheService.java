@@ -191,148 +191,164 @@ public class ConfigCacheService {
 
     /**
      * Save config file and update md5 value in cache.
-     *
-     * @param dataId         dataId string value.
-     * @param group          group string value.
-     * @param tenant         tenant string value.
-     * @param content        content string value.
-     * @param lastModifiedTs lastModifiedTs.
-     * @param betaIps        betaIps string value.
+     *  将 Beta 配置项（由 dataId、group 和 tenant 标识）写入磁盘，并更新本地 JVM 缓存
+     *  Beta 配置与普通配置不同，它特定于某些客户端 IP 地址
+     * @param dataId         dataId string value.     配置项的数据 ID
+     * @param group          group string value.      配置项所属的组
+     * @param tenant         tenant string value.    租户标识
+     * @param content        content string value.   配置项内容
+     * @param lastModifiedTs lastModifiedTs.      配置项的最后修改时间戳
+     * @param betaIps        betaIps string value.   特定于 Beta 配置的客户端 IP 列表
      * @return dumpChange success or not.
      */
     public static boolean dumpBeta(String dataId, String group, String tenant, String content, long lastModifiedTs,
             String betaIps, String encryptedDataKey) {
+        // 根据 dataId、group 和 tenant 生成唯一的 groupKey，用于标识该配置项
         final String groupKey = GroupKey2.getKey(dataId, group, tenant);
-
+        //确保 groupKey 对应的缓存项存在。如果不存在则创建缓存项
         makeSure(groupKey, null);
+        // 尝试获取写锁，确保在进行写操作时线程安全
         final int lockResult = tryWriteLock(groupKey);
 
-        if (lockResult < 0) {
+        if (lockResult < 0) {// 如果获取写锁失败，记录警告日志并返回 false，表示无法继续进行写操作
             DUMP_LOG.warn("[dump-beta-error] write lock failed. {}", groupKey);
             return false;
         }
 
         try {
-
+            //调用 getBetaLastModifiedTs(groupKey) 获取本地缓存中 Beta 配置的最后修改时间戳
+            // 如果传入的 lastModifiedTs 小于本地缓存中的时间戳，则忽略此次写操作
             //check timestamp
             boolean timestampOutDated = lastModifiedTs < ConfigCacheService.getBetaLastModifiedTs(groupKey);
             if (timestampOutDated) {
                 DUMP_LOG.warn("[dump-beta-ignore] timestamp is outdated,groupKey={}", groupKey);
                 return true;
             }
-
+            // 如果传入的时间戳大于本地缓存中的时间戳，则 timestampUpdated 为 true
             boolean timestampUpdated = lastModifiedTs > ConfigCacheService.getBetaLastModifiedTs(groupKey);
-
+            // 将 betaIps 字符串拆分为数组，并转换为 List<String>，用于存储 Beta 配置的 IP 列表
             String[] betaIpsArr = betaIps.split(",");
             List<String> betaIpList = Lists.newArrayList(betaIpsArr);
+            // 使用 MD5Utils.md5Hex 计算配置内容的 MD5 值，以确定配置是否发生变化
             String md5 = MD5Utils.md5Hex(content, ENCODE_UTF8);
 
             //md5 check & update local disk cache.
+            // 获取本地缓存中的 MD5 值，并与新计算的 MD5 值进行比较。如果不相等，表示配置内容发生了变化
             String localContentBetaMd5 = ConfigCacheService.getContentBetaMd5(groupKey);
             boolean md5Changed = !md5.equals(localContentBetaMd5);
+            // 如果 MD5 值发生了变化，将新的配置内容保存到磁盘
             if (md5Changed) {
                 DUMP_LOG.info(
                         "[dump-beta] md5 changed, update md5 in local disk cache. groupKey={}, newMd5={}, oldMd5={}",
                         groupKey, md5, localContentBetaMd5);
+                // TODO 进入
                 ConfigDiskServiceFactory.getInstance().saveBetaToDisk(dataId, group, tenant, content);
             }
 
             //md5 , ip list  timestamp check  and update local jvm cache.
+            // 如果传入的 betaIpList 与本地缓存中的 IP 列表不相等，表示 IP 列表发生了变化
             boolean ipListChanged = !betaIpList.equals(ConfigCacheService.getBetaIps(groupKey));
-            if (md5Changed) {
+            if (md5Changed) {// 如果 MD5 值发生了变化，则调用 updateBetaMd5 更新缓存中的 MD5 值、IP 列表和最后修改时间戳
                 DUMP_LOG.info(
                         "[dump-beta] md5 changed, update md5 & ip list & timestamp in jvm cache. groupKey={}, newMd5={}, oldMd5={}，lastModifiedTs={}",
                         groupKey, md5, localContentBetaMd5, lastModifiedTs);
                 updateBetaMd5(groupKey, md5, betaIpList, lastModifiedTs, encryptedDataKey);
-            } else if (ipListChanged) {
+            } else if (ipListChanged) {// 如果 IP 列表发生了变化，但 MD5 值没有变化，则调用 updateBetaIpList 更新缓存中的 IP 列表和时间戳
                 DUMP_LOG.warn("[dump-beta] ip list changed, update ip list & timestamp in jvm cache. groupKey={},"
                                 + " newIpList={}, oldIpList={}，lastModifiedTs={}", groupKey, betaIpList,
                         ConfigCacheService.getBetaIps(groupKey), lastModifiedTs);
                 updateBetaIpList(groupKey, betaIpList, lastModifiedTs);
-            } else if (timestampUpdated) {
+            } else if (timestampUpdated) { // 如果只有时间戳发生了变化，调用 updateBetaTimeStamp 更新缓存中的最后修改时间戳
                 DUMP_LOG.warn(
                         "[dump-beta] timestamp changed, update timestamp in jvm cache. groupKey={}, newLastModifiedTs={}, oldLastModifiedTs={}",
                         groupKey, lastModifiedTs, ConfigCacheService.getBetaLastModifiedTs(groupKey));
                 updateBetaTimeStamp(groupKey, lastModifiedTs);
-            } else {
+            } else { // 如果 MD5 值、IP 列表和时间戳都没有发生变化，则忽略此次操作并记录日志
                 DUMP_LOG.warn(
                         "[dump-beta-ignore] ignore to save jvm cache, md5 & ip list & timestamp no changed. groupKey={}",
                         groupKey);
             }
             return true;
-        } catch (IOException ioe) {
+        } catch (IOException ioe) {// 如果在保存到磁盘时发生 IOException，记录错误日志并返回 false
             DUMP_LOG.error("[dump-beta-exception] save disk error. " + groupKey + ", " + ioe.toString(), ioe);
             return false;
-        } finally {
+        } finally {// 无论操作是否成功，都会在 finally 块中释放写锁，确保不会出现锁泄漏
             releaseWriteLock(groupKey);
         }
     }
 
     /**
      * Save config file and update md5 value in cache.
+     * 用于将指定 dataId、group、tenant 和 tag 对应的配置内容写入磁盘，并更新缓存
+     * @param dataId         dataId string value. 数据标识符
+     * @param group          group string value. 配置所属的组
+     * @param tenant         tenant string value. 租户信息
+     * @param content        content string value. 配置内容
+     * @param lastModifiedTs lastModifiedTs. 配置最后修改时间戳
+     * @param tag            tag string value.    标签标识符
+     * @encryptedDataKey4Tag 用于加密该标签配置的加密密钥
      *
-     * @param dataId         dataId string value.
-     * @param group          group string value.
-     * @param tenant         tenant string value.
-     * @param content        content string value.
-     * @param lastModifiedTs lastModifiedTs.
-     * @param tag            tag string value.
      * @return dumpChange success or not.
      */
     public static boolean dumpTag(String dataId, String group, String tenant, String tag, String content,
             long lastModifiedTs, String encryptedDataKey4Tag) {
+        // 将 dataId、group 和 tenant 组合成唯一的 groupKey，用于标识该配置项
         final String groupKey = GroupKey2.getKey(dataId, group, tenant);
-
+        // 确保 groupKey 对应的缓存项存在。如果不存在则创建缓存项
         makeSure(groupKey, null);
+        // 尝试获取该 groupKey 的写锁，确保在进行写操作时线程安全
         final int lockResult = tryWriteLock(groupKey);
 
-        if (lockResult < 0) {
+        if (lockResult < 0) {// 如果 lockResult 小于 0，表示获取写锁失败，记录警告日志并返回 false
             DUMP_LOG.warn("[dump-tag-error] write lock failed. {}", groupKey);
             return false;
         }
 
         try {
+                // 调用 getTagLastModifiedTs(groupKey, tag) 获取本地缓存中 groupKey 和 tag 对应的配置的最后修改时间戳
+                //check timestamp
+                // lastModifiedTs：传入的配置的最后修改时间戳。
+                // localTagLastModifiedTs：本地缓存中 groupKey 和 tag 对应的配置的最后修改时间戳。
+                long localTagLastModifiedTs = ConfigCacheService.getTagLastModifiedTs(groupKey, tag);
 
-            //check timestamp
-            long localTagLastModifiedTs = ConfigCacheService.getTagLastModifiedTs(groupKey, tag);
+                // 如果传入的 lastModifiedTs 小于本地的最后修改时间戳，则说明该配置项的时间戳已经过期，记录日志并忽略此次写入操作，返回 true
+                boolean timestampOutdated = lastModifiedTs < localTagLastModifiedTs;
+                if (timestampOutdated) {
+                    DUMP_LOG.warn("[dump-tag-ignore] timestamp is outdated,groupKey={}", groupKey);
+                    return true;
+                }
+                // 如果 lastModifiedTs > localTagLastModifiedTs，即传入的配置时间戳比本地缓存中的时间戳更新
+                boolean timestampChanged = lastModifiedTs > localTagLastModifiedTs;
+                // 计算传入的配置内容 content 的 MD5 值，使用 UTF-8 编码
+                final String md5 = MD5Utils.md5Hex(content, ENCODE_UTF8);
+                // 获取本地缓存中该 tag 对应的 MD5 值，并检查是否与计算出的 MD5 不一致。如果不一致，表示配置内容发生了变化
+                String localContentTagMd5 = ConfigCacheService.getContentTagMd5(groupKey, tag);
+                boolean md5Changed = !md5.equals(localContentTagMd5);
+                // 如果 MD5 值发生变化，调用 saveTagToDisk 方法将新的配置内容保存到磁盘中
+                if (md5Changed) {
+                    ConfigDiskServiceFactory.getInstance().saveTagToDisk(dataId, group, tenant, tag, content);
+                }
+               // 如果 MD5 值发生了变化，更新本地 JVM 缓存中的 MD5 值、最后修改时间和加密密钥
+                if (md5Changed) {
+                    DUMP_LOG.warn(
+                            "[dump-tag] md5 changed, update local jvm cache, groupKey={},tag={}, newMd5={},oldMd5={},lastModifiedTs={}",
+                            groupKey, tag, md5, localContentTagMd5, lastModifiedTs);
+                    updateTagMd5(groupKey, tag, md5, lastModifiedTs, encryptedDataKey4Tag);
+                } else if (timestampChanged) { // 如果 MD5 值没有变化，但时间戳发生了变化，调用 updateTagTimeStamp 更新缓存中的最后修改时间
+                    DUMP_LOG.warn(
+                            "[dump-tag] timestamp changed, update last modified in local jvm cache, groupKey={},tag={},"
+                                    + "tagLastModifiedTs={},oldTagLastModifiedTs={}", groupKey, tag, lastModifiedTs,
+                            localTagLastModifiedTs);
+                    updateTagTimeStamp(groupKey, tag, lastModifiedTs);
 
-            boolean timestampOutdated = lastModifiedTs < localTagLastModifiedTs;
-            if (timestampOutdated) {
-                DUMP_LOG.warn("[dump-tag-ignore] timestamp is outdated,groupKey={}", groupKey);
+                } else {
+                    DUMP_LOG.warn("[dump-tag-ignore] md5 & timestamp not changed. groupKey={},tag={}", groupKey, tag);
+                }
                 return true;
-            }
-
-            boolean timestampChanged = lastModifiedTs > localTagLastModifiedTs;
-
-            final String md5 = MD5Utils.md5Hex(content, ENCODE_UTF8);
-
-            String localContentTagMd5 = ConfigCacheService.getContentTagMd5(groupKey, tag);
-            boolean md5Changed = !md5.equals(localContentTagMd5);
-
-            if (md5Changed) {
-                ConfigDiskServiceFactory.getInstance().saveTagToDisk(dataId, group, tenant, tag, content);
-            }
-
-            if (md5Changed) {
-                DUMP_LOG.warn(
-                        "[dump-tag] md5 changed, update local jvm cache, groupKey={},tag={}, newMd5={},oldMd5={},lastModifiedTs={}",
-                        groupKey, tag, md5, localContentTagMd5, lastModifiedTs);
-                updateTagMd5(groupKey, tag, md5, lastModifiedTs, encryptedDataKey4Tag);
-            } else if (timestampChanged) {
-                DUMP_LOG.warn(
-                        "[dump-tag] timestamp changed, update last modified in local jvm cache, groupKey={},tag={},"
-                                + "tagLastModifiedTs={},oldTagLastModifiedTs={}", groupKey, tag, lastModifiedTs,
-                        localTagLastModifiedTs);
-                updateTagTimeStamp(groupKey, tag, lastModifiedTs);
-
-            } else {
-                DUMP_LOG.warn("[dump-tag-ignore] md5 & timestamp not changed. groupKey={},tag={}", groupKey, tag);
-            }
-            return true;
-        } catch (IOException ioe) {
+        } catch (IOException ioe) {// 如果在保存到磁盘时发生 IOException，记录错误日志并返回 false
             DUMP_LOG.error("[dump-tag-exception] save disk error. " + groupKey + ", " + ioe.toString(), ioe);
             return false;
-        } finally {
+        } finally {//无论操作是否成功，都会在 finally 块中释放写锁，确保不会出现锁泄漏
             releaseWriteLock(groupKey);
         }
     }
