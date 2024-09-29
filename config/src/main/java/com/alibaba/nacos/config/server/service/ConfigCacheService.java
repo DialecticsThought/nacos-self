@@ -382,32 +382,37 @@ public class ConfigCacheService {
 
     /**
      * Delete beta config file, and delete cache.
-     *
-     * @param dataId dataId string value.
-     * @param group  group string value.
-     * @param tenant tenant string value.
+     * 用于删除 dataId、group 和 tenant 对应的 Beta 配置文件
+     * @param dataId dataId string value. 数据 ID
+     * @param group  group string value. 配置所属的组
+     * @param tenant tenant string value. 租户信息
      * @return remove success or not.
      */
     public static boolean removeBeta(String dataId, String group, String tenant) {
+        // 根据 dataId、group 和 tenant 生成唯一的 groupKey，用于标识该配置项
         final String groupKey = GroupKey2.getKey(dataId, group, tenant);
+        // 尝试对该 groupKey 获取写锁，确保删除操作的线程安全性
         final int lockResult = tryWriteLock(groupKey);
 
         // If data is non-existent.
-        if (0 == lockResult) {
+        if (0 == lockResult) { // 如果 lockResult 为 0，表示该 groupKey 对应的数据不存在，直接返回 true，并记录日志
             DUMP_LOG.info("[remove-ok] {} not exist.", groupKey);
             return true;
         }
 
         // try to lock failed
-        if (lockResult < 0) {
+        if (lockResult < 0) {// 如果 lockResult 小于 0，表示获取写锁失败，记录警告日志并返回 false
             DUMP_LOG.warn("[remove-error] write lock failed. {}", groupKey);
             return false;
         }
 
         try {
             DUMP_LOG.info("[remove-beta-ok] remove beta in local disk cache,groupKey={} ", groupKey);
+            // 从本地磁盘中删除 Beta 配置文件
             ConfigDiskServiceFactory.getInstance().removeConfigInfo4Beta(dataId, group, tenant);
+            // 发布本地数据变更事件，通知系统该 groupKey 的 Beta 配置已被移除
             NotifyCenter.publishEvent(new LocalDataChangeEvent(groupKey, true, CACHE.get(groupKey).getIps4Beta()));
+            // 从本地 map 缓存中删除 Beta 配置信息
             CACHE.get(groupKey).removeBeta();
             DUMP_LOG.info("[remove-beta-ok] remove beta in local jvm cache,groupKey={} ", groupKey);
 
@@ -419,43 +424,48 @@ public class ConfigCacheService {
 
     /**
      * Delete tag config file, and delete cache.
-     *
-     * @param dataId dataId string value.
-     * @param group  group string value.
-     * @param tenant tenant string value.
-     * @param tag    tag string value.
+     * 于删除 dataId、group、tenant 和 tag 对应的标签配置文件
+     * @param dataId dataId string value. 数据 ID
+     * @param group  group string value. 配置所属的组
+     * @param tenant tenant string value. 租户信息
+     * @param tag    tag string value. 标签信息
      * @return remove success or not.
      */
     public static boolean removeTag(String dataId, String group, String tenant, String tag) {
+        // 根据 dataId、group 和 tenant 生成唯一的 groupKey，用于标识该配置项
         final String groupKey = GroupKey2.getKey(dataId, group, tenant);
+        // 尝试对该 groupKey 获取写锁，确保删除操作的线程安全性
         final int lockResult = tryWriteLock(groupKey);
 
         // If data is non-existent.
-        if (0 == lockResult) {
+        if (0 == lockResult) {//如果 lockResult 为 0，表示该 groupKey 对应的数据不存在，直接返回 true，并记录日志
             DUMP_LOG.info("[remove-ok] {} not exist.", groupKey);
             return true;
         }
 
         // try to lock failed
-        if (lockResult < 0) {
+        if (lockResult < 0) {//如果 lockResult 小于 0，表示获取写锁失败，记录警告日志并返回 false
             DUMP_LOG.warn("[remove-error] write lock failed. {}", groupKey);
             return false;
         }
 
         try {
             DUMP_LOG.info("[remove-tag-ok] remove tag in local disk cache,tag={},groupKey={} ", tag, groupKey);
+            //从本地磁盘中删除标签配置文件
             ConfigDiskServiceFactory.getInstance().removeConfigInfo4Tag(dataId, group, tenant, tag);
-
+            // 从本地缓存中获取 groupKey 对应的 CacheItem
             CacheItem ci = CACHE.get(groupKey);
+            // 如果该配置项包含标签缓存 (configCacheTags)，则删除该 tag 对应的配置
             if (ci.getConfigCacheTags() != null) {
                 ci.getConfigCacheTags().remove(tag);
+                // 如果删除后标签缓存为空，清空整个标签缓存
                 if (ci.getConfigCacheTags().isEmpty()) {
                     ci.clearConfigTags();
                 }
             }
 
             DUMP_LOG.info("[remove-tag-ok] remove tag in local jvm cache,tag={},groupKey={} ", tag, groupKey);
-
+            // 发布本地数据变更事件，通知系统该 groupKey 和 tag 对应的标签配置已被移除，并返回 true
             NotifyCenter.publishEvent(new LocalDataChangeEvent(groupKey, tag));
             return true;
         } finally {
