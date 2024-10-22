@@ -261,6 +261,7 @@ public class NamingGrpcClientProxy extends AbstractNamingClientProxy {
         // TODO 进入
         requestToServer(request, Response.class);
         // 实例注册成功,将缓存（上一步将实例缓存在registeredInstances中）中的注册状态标记为true
+        // TODO 进入
         redoService.instanceRegistered(serviceName, groupName);
     }
 
@@ -274,8 +275,10 @@ public class NamingGrpcClientProxy extends AbstractNamingClientProxy {
      */
     public void doRegisterServiceForPersistent(String serviceName, String groupName, Instance instance)
             throws NacosException {
+        // 构建请求
         PersistentInstanceRequest request = new PersistentInstanceRequest(namespaceId, serviceName, groupName,
                 NamingRemoteConstants.REGISTER_INSTANCE, instance);
+        // 发送请求
         requestToServer(request, Response.class);
     }
 

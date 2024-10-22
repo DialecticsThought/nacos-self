@@ -146,8 +146,10 @@ public class NamingGrpcRedoService implements ConnectionEventListener {
     public void instanceRegistered(String serviceName, String groupName) {
         String key = NamingUtils.getGroupedName(serviceName, groupName);
         synchronized (registeredInstances) {
+            //得到 group@@service 对应的redoData
             InstanceRedoData redoData = registeredInstances.get(key);
             if (null != redoData) {
+                // TODO 进入
                 redoData.registered();
             }
         }

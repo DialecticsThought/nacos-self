@@ -64,7 +64,7 @@ public class InstanceRequestHandler extends RequestHandler<InstanceRequest, Inst
             // 处理注册实例请求
             case NamingRemoteConstants.REGISTER_INSTANCE:
                 return registerInstance(service, request, meta);
-            // 处理下线实例请求
+            // 处理下线(注册的反义词)实例请求
             case NamingRemoteConstants.DE_REGISTER_INSTANCE:
                 return deregisterInstance(service, request, meta);
             default:
