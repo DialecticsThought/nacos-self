@@ -88,6 +88,7 @@ public abstract class AbstractClient implements Client {
         }
 
         // 发布一个客户端注册事件通知订阅者
+        // TODO 这个订阅者是nacos集群中的其他nacos 查看DistroClientDataProcessor
         NotifyCenter.publishEvent(new ClientEvent.ClientChangedEvent(this));
         Loggers.SRV_LOG.info("Client change for service {}, {}", service, getClientId());
         return true;
