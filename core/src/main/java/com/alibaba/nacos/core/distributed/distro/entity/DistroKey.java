@@ -23,12 +23,11 @@ import java.util.Objects;
  *
  * @author xiweng.yy
  *
- * DistroKey distroKey = new DistroKey("client123-session", "SESSION", "192.168.1.10");
  */
 public class DistroKey {
-    // 保存资源的唯一键
+    // 保存资源的唯一键  eg:客户端id
     private String resourceKey;
-    // 保存资源的类型
+    // 保存资源的类型 // Nacos:Naming:v2:ClientData
     private String resourceType;
     // 目标服务器，用于表示该分布式键要同步到的服务器
     private String targetServer;
