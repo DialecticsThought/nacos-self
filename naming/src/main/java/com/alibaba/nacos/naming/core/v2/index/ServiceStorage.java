@@ -47,19 +47,19 @@ import java.util.concurrent.ConcurrentMap;
  */
 @Component
 public class ServiceStorage {
-    
+
     private final ClientServiceIndexesManager serviceIndexesManager;
-    
+
     private final ClientManager clientManager;
-    
+
     private final SwitchDomain switchDomain;
-    
+
     private final NamingMetadataManager metadataManager;
-    
+
     private final ConcurrentMap<Service, ServiceInfo> serviceDataIndexes;
-    
+
     private final ConcurrentMap<Service, Set<String>> serviceClusterIndex;
-    
+
     public ServiceStorage(ClientServiceIndexesManager serviceIndexesManager, ClientManagerDelegate clientManager,
             SwitchDomain switchDomain, NamingMetadataManager metadataManager) {
         this.serviceIndexesManager = serviceIndexesManager;
@@ -69,31 +69,35 @@ public class ServiceStorage {
         this.serviceDataIndexes = new ConcurrentHashMap<>();
         this.serviceClusterIndex = new ConcurrentHashMap<>();
     }
-    
+
     public Set<String> getClusters(Service service) {
         return serviceClusterIndex.getOrDefault(service, new HashSet<>());
     }
-    
+
     public ServiceInfo getData(Service service) {
+        // TODO 查看 getPushData
         return serviceDataIndexes.containsKey(service) ? serviceDataIndexes.get(service) : getPushData(service);
     }
-    
+
     public ServiceInfo getPushData(Service service) {
         ServiceInfo result = emptyServiceInfo(service);
         if (!ServiceManager.getInstance().containSingleton(service)) {
             return result;
         }
+        // 获取在注册表中的服务【前面服务注册时候讲到过】
         Service singleton = ServiceManager.getInstance().getSingleton(service);
+        // 这个 hosts 其实就是实例列表 ☆ ☆ ☆ ☆ ☆ ☆ ☆
+        // TODO 进入
         result.setHosts(getAllInstancesFromIndex(singleton));
         serviceDataIndexes.put(singleton, result);
         return result;
     }
-    
+
     public void removeData(Service service) {
         serviceDataIndexes.remove(service);
         serviceClusterIndex.remove(service);
     }
-    
+
     private ServiceInfo emptyServiceInfo(Service service) {
         ServiceInfo result = new ServiceInfo();
         result.setName(service.getName());
@@ -102,11 +106,15 @@ public class ServiceStorage {
         result.setCacheMillis(switchDomain.getDefaultPushCacheMillis());
         return result;
     }
-    
+
     private List<Instance> getAllInstancesFromIndex(Service service) {
+        // 用来存放 五福实例对象的
         Set<Instance> result = new HashSet<>();
+        // 用来存放对应集群的
         Set<String> clusters = new HashSet<>();
+        // 这里获取服务下面所有的 clientId 【用 each 接收了】
         for (String each : serviceIndexesManager.getAllClientsRegisteredService(service)) {
+            // 从每个 clientId 中获取  IpPortBasedClient 信息 具体代码下面贴上了
             Optional<InstancePublishInfo> instancePublishInfo = getInstanceInfo(each, service);
             if (instancePublishInfo.isPresent()) {
                 InstancePublishInfo publishInfo = instancePublishInfo.get();
@@ -116,6 +124,7 @@ public class ServiceStorage {
                     List<Instance> batchInstance = parseBatchInstance(service, batchInstancePublishInfo, clusters);
                     result.addAll(batchInstance);
                 } else {
+                    // 转换成 服务实例对象，装载 metadata 信息
                     Instance instance = parseInstance(service, instancePublishInfo.get());
                     result.add(instance);
                     clusters.add(instance.getClusterName());
@@ -126,7 +135,7 @@ public class ServiceStorage {
         serviceClusterIndex.put(service, clusters);
         return new LinkedList<>(result);
     }
-    
+
     /**
      * Parse batch instance.
      * @param service service
@@ -143,16 +152,19 @@ public class ServiceStorage {
         }
         return resultInstanceList;
     }
-    
+
     private Optional<InstancePublishInfo> getInstanceInfo(String clientId, Service service) {
+        // 从map中根据id得到相应客户端
         Client client = clientManager.getClient(clientId);
         if (null == client) {
             return Optional.empty();
         }
+        // 返回InstancePublishInfo
         return Optional.ofNullable(client.getInstancePublishInfo(service));
     }
-    
+
     private Instance parseInstance(Service service, InstancePublishInfo instanceInfo) {
+        // TODO 查看
         Instance result = InstanceUtil.parseToApiInstance(service, instanceInfo);
         Optional<InstanceMetadata> metadata = metadataManager
                 .getInstanceMetadata(service, instanceInfo.getMetadataId());

@@ -37,68 +37,68 @@ import java.util.Collection;
  * @author xiweng.yy
  */
 public class IpPortBasedClient extends AbstractClient {
-    
+
     public static final String ID_DELIMITER = "#";
-    
+
     private final String clientId;
-    
+
     private final boolean ephemeral;
-    
+
     private final String responsibleId;
-    
+    // 关于临时实例的心跳
     private ClientBeatCheckTaskV2 beatCheckTask;
-    
+    // 关于永久实例的心跳
     private HealthCheckTaskV2 healthCheckTaskV2;
-    
+
     public IpPortBasedClient(String clientId, boolean ephemeral) {
         this(clientId, ephemeral, null);
     }
-    
+
     public IpPortBasedClient(String clientId, boolean ephemeral, Long revision) {
         super(revision);
         this.ephemeral = ephemeral;
         this.clientId = clientId;
         this.responsibleId = getResponsibleTagFromId();
     }
-    
+
     private String getResponsibleTagFromId() {
         int index = clientId.indexOf(IpPortBasedClient.ID_DELIMITER);
         return clientId.substring(0, index);
     }
-    
+
     public static String getClientId(String address, boolean ephemeral) {
         return address + ID_DELIMITER + ephemeral;
     }
-    
+
     @Override
     public String getClientId() {
         return clientId;
     }
-    
+
     @Override
     public boolean isEphemeral() {
         return ephemeral;
     }
-    
+
     public String getResponsibleId() {
         return responsibleId;
     }
-    
+
     @Override
     public boolean addServiceInstance(Service service, InstancePublishInfo instancePublishInfo) {
         return super.addServiceInstance(service, parseToHealthCheckInstance(instancePublishInfo));
     }
-    
+
     @Override
     public boolean isExpire(long currentTime) {
         return isEphemeral() && getAllPublishedService().isEmpty() && currentTime - getLastUpdatedTime() > ClientConfig
                 .getInstance().getClientExpiredTime();
     }
-    
+
     public Collection<InstancePublishInfo> getAllInstancePublishInfo() {
         return publishers.values();
     }
-    
+
     @Override
     public void release() {
         super.release();
@@ -108,7 +108,7 @@ public class IpPortBasedClient extends AbstractClient {
             healthCheckTaskV2.setCancelled(true);
         }
     }
-    
+
     private HealthCheckInstancePublishInfo parseToHealthCheckInstance(InstancePublishInfo instancePublishInfo) {
         HealthCheckInstancePublishInfo result;
         if (instancePublishInfo instanceof HealthCheckInstancePublishInfo) {
@@ -126,20 +126,23 @@ public class IpPortBasedClient extends AbstractClient {
         }
         return result;
     }
-    
+
     /**
      * Init client.
+     * 临时和永久时都是 通过 HealthCheckReactor 发起调度的，
+     * 内部是把任务放到一个叫“futureMap”的Map中，使用过线程池每隔五秒发起一次调度
+     *
      */
     public void init() {
-        if (ephemeral) {
+        if (ephemeral) {//临时的实例 查看run方法
             beatCheckTask = new ClientBeatCheckTaskV2(this);
             HealthCheckReactor.scheduleCheck(beatCheckTask);
-        } else {
+        } else {// 永久的实例 查看run方法
             healthCheckTaskV2 = new HealthCheckTaskV2(this);
             HealthCheckReactor.scheduleCheck(healthCheckTaskV2);
         }
     }
-    
+
     /**
      * Purely put instance into service without publish events.
      */

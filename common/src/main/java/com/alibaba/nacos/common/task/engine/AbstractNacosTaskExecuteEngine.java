@@ -34,7 +34,7 @@ public abstract class AbstractNacosTaskExecuteEngine<T extends NacosTask> implem
     private final Logger log;
     /**
      * 对处理类NacosTaskProcessor的缓存
-     * key: Service服务
+     * key: 任务id
      * value: NacosTaskProcessor处理类
      */
     private final ConcurrentHashMap<Object, NacosTaskProcessor> taskProcessors = new ConcurrentHashMap<>();

@@ -99,7 +99,9 @@ public abstract class RpcClient implements Closeable {
     protected List<ServerRequestHandler> serverRequestHandlers = new ArrayList<>();
 
     private static final Pattern EXCLUDE_PROTOCOL_PATTERN = Pattern.compile("(?<=\\w{1,5}://)(.*)");
-
+    /**
+     * 关于RPC客户端的配置 一般是从properties中读取
+     */
     protected RpcClientConfig rpcClientConfig;
 
     protected final ResourceLoader resourceLoader = new DefaultResourceLoader();
@@ -431,11 +433,17 @@ public abstract class RpcClient implements Closeable {
         closeConnection(currentConnection);
     }
 
+    /**
+     * 向服务端 发送健康检查请求
+     * 查看服务端的HealthCheckRequestHandler
+     * @return
+     */
     private boolean healthCheck() {
         HealthCheckRequest healthCheckRequest = new HealthCheckRequest();
         if (this.currentConnection == null) {
             return false;
         }
+        // 重试机制 ${nacos.remote.client.grpc.healthy.retry}
         int reTryTimes = rpcClientConfig.healthCheckRetryTimes();
         Random random = new Random();
         while (reTryTimes >= 0) {
@@ -445,6 +453,7 @@ public abstract class RpcClient implements Closeable {
                     Thread.sleep(random.nextInt(500));
                 }
                 Response response = this.currentConnection
+                        //连接超时 ${nacos.remote.client.grpc.healthy.timeout}
                         .request(healthCheckRequest, rpcClientConfig.healthCheckTimeOut());
                 // not only check server is ok, also check connection is register.
                 return response != null && response.isSuccess();

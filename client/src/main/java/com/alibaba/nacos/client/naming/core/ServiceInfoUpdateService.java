@@ -113,6 +113,7 @@ public class ServiceInfoUpdateService implements Closeable {
         }
         synchronized (futureMap) {
             // double check双重检查，如果非空，直接返回，也就是相同的groupName@@serviceName@@clusters，只会存在一个UpdateTask任务
+            // TODO 定时任务就是 定时从服务端拉取最新的拂去信息 存到serviceInfoHolder缓存中
             if (futureMap.get(serviceKey) != null) {
                 return;
             }

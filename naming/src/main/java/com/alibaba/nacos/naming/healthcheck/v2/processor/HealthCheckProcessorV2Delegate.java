@@ -31,36 +31,53 @@ import java.util.stream.Collectors;
 
 /**
  * Delegate of health check v2.x.
- *
+ * 健康检查 v2.x 的委托类
+ * 这个类作为健康检查的代理，管理不同类型的健康检查处理器
  * @author nacos
  */
 @Component("healthCheckDelegateV2")
 public class HealthCheckProcessorV2Delegate implements HealthCheckProcessorV2 {
-    
+    // 一个Map，用来存储按类型分类的健康检查处理器
     private final Map<String, HealthCheckProcessorV2> healthCheckProcessorMap = new HashMap<>();
-    
+    /**
+     * 构造方法，初始化提供者和扩展的健康检查处理器
+     * @param provider 健康检查扩展提供者
+     * @param healthCheckProcessorExtend 扩展的健康检查处理器
+     */
     public HealthCheckProcessorV2Delegate(HealthCheckExtendProvider provider,
             HealthCheckProcessorExtendV2 healthCheckProcessorExtend) {
+        // 初始化提供者（可能是配置资源或其他初始化工作）
         provider.setHealthCheckProcessorExtend(healthCheckProcessorExtend);
+        // 初始化提供者（可能是配置资源或其他初始化工作）
         provider.init();
     }
-    
+
+    /**
+     * Spring的自动注入方法，通过该方法将健康检查处理器集合注入进来
+     * 将每个处理器按其类型存入Map中
+     * @param processors 健康检查处理器的集合
+     */
     @Autowired
     public void addProcessor(Collection<HealthCheckProcessorV2> processors) {
+        // 过滤掉处理器类型为空的处理器，将其类型和处理器本身映射存入Map
         healthCheckProcessorMap.putAll(processors.stream().filter(processor -> processor.getType() != null)
                 .collect(Collectors.toMap(HealthCheckProcessorV2::getType, processor -> processor)));
     }
-    
+
     @Override
     public void process(HealthCheckTaskV2 task, Service service, ClusterMetadata metadata) {
+        // 获取健康检查类型
         String type = metadata.getHealthyCheckType();
+        // 根据健康检查类型获取对应的处理器
         HealthCheckProcessorV2 processor = healthCheckProcessorMap.get(type);
+        // 如果没有找到匹配的处理器，使用默认的None类型处理器
         if (processor == null) {
             processor = healthCheckProcessorMap.get(NoneHealthCheckProcessor.TYPE);
         }
+        // 执行处理器的健康检查任务
         processor.process(task, service, metadata);
     }
-    
+
     @Override
     public String getType() {
         return null;

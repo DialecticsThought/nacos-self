@@ -31,46 +31,47 @@ import java.util.List;
  * @author xiweng.yy
  */
 public class InstanceBeatCheckTask implements Interceptable {
-    
+
     private static final List<InstanceBeatChecker> CHECKERS = new LinkedList<>();
-    
+
     private final IpPortBasedClient client;
-    
+
     private final Service service;
-    
+
     private final HealthCheckInstancePublishInfo instancePublishInfo;
-    
+
     static {
         CHECKERS.add(new UnhealthyInstanceChecker());
         CHECKERS.add(new ExpiredInstanceChecker());
         CHECKERS.addAll(NacosServiceLoader.load(InstanceBeatChecker.class));
     }
-    
+
     public InstanceBeatCheckTask(IpPortBasedClient client, Service service, HealthCheckInstancePublishInfo instancePublishInfo) {
         this.client = client;
         this.service = service;
         this.instancePublishInfo = instancePublishInfo;
     }
-    
+
     @Override
     public void passIntercept() {
+        // 分别调用了 UnhealthyInstanceChecker 和 ExpiredInstanceChecker 的 doCheck 方法
         for (InstanceBeatChecker each : CHECKERS) {
             each.doCheck(client, service, instancePublishInfo);
         }
     }
-    
+
     @Override
     public void afterIntercept() {
     }
-    
+
     public IpPortBasedClient getClient() {
         return client;
     }
-    
+
     public Service getService() {
         return service;
     }
-    
+
     public HealthCheckInstancePublishInfo getInstancePublishInfo() {
         return instancePublishInfo;
     }

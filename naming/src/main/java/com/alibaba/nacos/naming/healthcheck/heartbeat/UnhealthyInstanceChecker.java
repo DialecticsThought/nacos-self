@@ -43,19 +43,23 @@ import java.util.Optional;
  * @author xiweng.yy
  */
 public class UnhealthyInstanceChecker implements InstanceBeatChecker {
-    
+
     @Override
     public void doCheck(Client client, Service service, HealthCheckInstancePublishInfo instance) {
+        // 实例当花钱处于健康状态 但是检测发现不健康了
         if (instance.isHealthy() && isUnhealthy(service, instance)) {
+            // 改为状态不健康
             changeHealthyStatus(client, service, instance);
         }
     }
-    
+
     private boolean isUnhealthy(Service service, HealthCheckInstancePublishInfo instance) {
+        // 获取超时心跳时间
         long beatTimeout = getTimeout(service, instance);
+        // 当前时间 - 上一次心跳时间
         return System.currentTimeMillis() - instance.getLastHeartBeatTime() > beatTimeout;
     }
-    
+
     private long getTimeout(Service service, InstancePublishInfo instance) {
         Optional<Object> timeout = getTimeoutFromMetadata(service, instance);
         if (!timeout.isPresent()) {
@@ -63,13 +67,13 @@ public class UnhealthyInstanceChecker implements InstanceBeatChecker {
         }
         return timeout.map(ConvertUtils::toLong).orElse(Constants.DEFAULT_HEART_BEAT_TIMEOUT);
     }
-    
+
     private Optional<Object> getTimeoutFromMetadata(Service service, InstancePublishInfo instance) {
         Optional<InstanceMetadata> instanceMetadata = ApplicationUtils.getBean(NamingMetadataManager.class)
                 .getInstanceMetadata(service, instance.getMetadataId());
         return instanceMetadata.map(metadata -> metadata.getExtendData().get(PreservedMetadataKeys.HEART_BEAT_TIMEOUT));
     }
-    
+
     private void changeHealthyStatus(Client client, Service service, HealthCheckInstancePublishInfo instance) {
         instance.setHealthy(false);
         Loggers.EVT_LOG
